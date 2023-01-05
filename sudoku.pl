@@ -17,6 +17,12 @@ replicate(Elem, Cnt, [Elem|XS]) :-
     Ncnt is Cnt - 1,
     replicate(Elem, Ncnt, XS).
 
+% I used "once" becaue I thought it meant succeed if exactly one solution
+% no.  It meant, give first solution.
+% need way to check that only ONE solution exists.
+unique(X) :-
+    aggregate_all(count, X, 1).
+
 %%%%%%%%%%%%%%%%%%%%%%
 %% Grid data structure
 %%%%%%%%%%%%%%%%%%%%%%
@@ -148,7 +154,7 @@ solve(StartGrid, EndGrid)  :-
 % Therefore, it's possible the "fill in from blank for a while" puzzle technique may fail.
 
 % punch_holes takes a full[er] grid, and a number of holes to punch, and punches that many holes
-punch_holes(Grid, 0, Grid) :- once(solve(Grid, _)).  % ensure a single unique solution once all holes punched.
+punch_holes(Grid, 0, Grid) :- unique(solve(Grid, _)).  % ensure a single unique solution once all holes punched.
 punch_holes(Grid, N, HGrid) :- 
     all_XY(XYS),
     random_permutation(XYS, RXYS),  % randomally consider all positions
@@ -165,7 +171,7 @@ punch_holes(Grid, N, HGrid, [(X,Y)|XYS]) :-
 punch_hole(Grid, X, Y, HGrid) :-    % punch the hole if stay
     \+ read_grid_element(Grid, X, Y, empty_position),  % ensure the location is not already empty
     set_grid_element(Grid, X, Y, empty_position, HGrid), % empty the location
-    once(propose_value(HGrid, X, Y, _)).  % check that exactly one value can go into the location.
+    unique(propose_value(HGrid, X, Y, _)).  % check that exactly one value can go into the location.
 
     % note: you may notice we check uniqueness twice - 
     % once when punching the hole (ensure only one possible value coudl go back and fill it)

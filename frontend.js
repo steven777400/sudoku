@@ -238,7 +238,7 @@ async function newGameSelected(e) {
             diffblanks = 35;
             break;
         case 'hard':
-            diffblanks = 45;
+            diffblanks = 40; // would like to do 45 but it hangs up
             break;
     }
     const result = await makePuzzle(diffblanks);

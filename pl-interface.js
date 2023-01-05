@@ -19,8 +19,12 @@ async function initBackend() {
 
 
 async function makePuzzle(difficulty) {
+    let result;
 
-    const result = await prologSession.forEach("make_puzzle(Difficulty, Puzzle, FullSolution)", { Difficulty: difficulty });
+    // retry puzzle creation, as it can fail
+    do {
+        result = await prologSession.forEach("make_puzzle(Difficulty, Puzzle, FullSolution)", { Difficulty: difficulty });
+    } while (result.length === 0);
     prologInitialpuzzle = result[0].Puzzle;
 
     // replace the empty position with null

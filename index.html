@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en-us">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <title>Sudoku</title>
+    <link rel="stylesheet" href="style.css" />
+    <!-- Favicon from https://favicon.io/emoji-favicons/input-numbers/ -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <script type="text/javascript" src="swipl/swipl-web.js"></script>
+    <script type="text/javascript" src="frontend.js"></script>
+    <script type="text/javascript" src="pl-interface.js"></script>
+
+</head>
+
+<body>
+
+    <div class="before">
+        <h1>Sudoku<span id="gameDesc"></span></h1>
+        <p id="timer">00:00:00</p>
+    </div>
+    <div id="container">
+        <!-- populated by frontend.js:initGrid()
+
+        <div class="block">
+            <div>1</div>
+            <div><button class="user">2</button></div>
+            <div><button class="empty"></button></div>
+          ...
+        </div>
+        ...
+      -->
+    </div>
+    <div class="after">
+        <button id="newGameButton" disabled>New Game</button>
+        <button id="hintButton" disabled>Hint</button>
+        <button id="pauseButton" disabled>Pause</button>
+        <button id="resumeButton" disabled>Resume</button>
+    </div>
+
+    <dialog id="chooseNumberDialog">
+        <form method="dialog">
+            <div class="block">
+                <div><button id='chooseNumberButton-1' value='1'>1</button></div>
+                <div><button id='chooseNumberButton-2' value='2'>2</button></div>
+                <div><button id='chooseNumberButton-3' value='3'>3</button></div>
+
+                <div><button id='chooseNumberButton-4' value='4'>4</button></div>
+                <div><button id='chooseNumberButton-5' value='5'>5</button></div>
+                <div><button id='chooseNumberButton-6' value='6'>6</button></div>
+
+                <div><button id='chooseNumberButton-7' value='7'>7</button></div>
+                <div><button id='chooseNumberButton-8' value='8'>8</button></div>
+                <div><button id='chooseNumberButton-9' value='9'>9</button></div>
+            </div>
+            <div>
+                <button value='cancel'>Cancel</button>
+                <button value='clear'>Clear</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="newGameDialog">
+        <form method="dialog">
+            <div>
+                <p>Select Game Difficulty</p>
+                <button class="difficulty" value="easy"><h2>Easy</h2> Moderate empty squares. Guidance on number selection. Hints available.</button>
+                <button class="difficulty" value="medium"><h2>Medium</h2> Moderate empty squares. No guidance on number selection, but hints available.</button>
+                <button class="difficulty" value="hard"><h2>Hard</h2> Lots of empty squares. No help.</button>
+                <button value="cancel">Cancel</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script>
+        initUI();
+        initBackend().then(() => {
+            document.getElementById('newGameButton').disabled = false;
+        });
+    </script>
+<footer>
+    (c) 2023 <a href="https://kolls.net">Steve Kollmansberger</a>
+</footer>
+</body>
+
+</html>

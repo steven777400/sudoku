@@ -7,9 +7,9 @@
     <title>Sudoku</title>
     <link rel="stylesheet" href="style.css" />
     <!-- Favicon from https://favicon.io/emoji-favicons/input-numbers/ -->
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <script type="text/javascript" src="swipl/swipl-web.js"></script>
     <script type="text/javascript" src="frontend.js"></script>
     <script type="text/javascript" src="pl-interface.js"></script>
@@ -78,6 +78,7 @@
     <script>
         initUI();
         initBackend().then(() => {
+            // enable new game once the backend is loaded
             document.getElementById('newGameButton').disabled = false;
         });
     </script>

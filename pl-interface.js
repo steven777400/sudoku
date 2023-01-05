@@ -1,7 +1,7 @@
 'use strict';
 
 let prologSession;
-let prologInitialpuzzle; // since hte frontend representation is slightly different, we retain our own copy
+let prologInitialpuzzle; // since the frontend representation is slightly different, we retain our own copy
 
 async function initBackend() {
     // see https://www.swi-prolog.org/pldoc/man?section=wasm-loading
@@ -11,6 +11,8 @@ async function initBackend() {
     };
     await SWIPL(Module);
     prologSession = Module.prolog;
+    // Many servers refuse to dispense .pl directly!
+    // so make sure this is allowed by some config
     await prologSession.consult("sudoku.pl");
 }
 

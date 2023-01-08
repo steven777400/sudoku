@@ -2,12 +2,6 @@
 
 %%% Utility
 
-%split_at(Index, FullList, Prefix, Postfix)            
-% the element at Index will be part of Postfix
-split_at(0, XS, [], XS) :- !.
-split_at(Id, [X|XS], [X|PreX], Post) :-    
-    Nid is Id - 1,
-    split_at(Nid, XS, PreX, Post).
 
 % **** BUILTIN in Tau-Prolog but not in SWI-Prolog    
 % replicate(Element, Count, FullList)
@@ -32,7 +26,12 @@ unique(X) :-
 % ended up with a linear list with the square representation abstracted on top.
 
 % an empty grid is 9*9 = 81 empty positions.
-empty_grid(Grid) :- replicate(empty_position, 81, Grid).
+
+% originally used a list to represent the grid, but read and set were very slow in aggregate
+% using a term allows constant access instead of a linked list, more like an array.
+empty_grid(Grid) :- 
+    replicate(empty_position, 81, G), 
+    Grid =.. [grid | G].
 
 % all_XY is, in list of tuple form, all allowed (X, Y) positions in the grid
 all_XY(XYS) :-
@@ -41,18 +40,24 @@ all_XY(XYS) :-
         between(0, 8, Y)
      ), XYS).
 
+% because "is" does not work both ways (we could use constraint programming here actually)
+% for now, we'll implement it both directions by hand.
+% arg is 1 based
+argpos(X, Y, Arg) :-
+    ground((X, Y)) -> Arg is Y * 9 + X + 1 ; (Y is div(Arg - 1, 9), X is mod(Arg - 1, 9)).
+
 % read_grid_element(Grid, X, Y, Element) maps the X and Y into the linear list
 % and matches the element there.
 read_grid_element(Grid, X, Y, E) :-
-    Eid is Y * 9 + X,
-    nth0(Eid, Grid, E).
+    argpos(X, Y, Eid), 
+    arg(Eid, Grid, E).
     
 % set_grid_element(Grid, X, Y, Element, NewGrid) replaces the grid element at X, Y
 % and binds it to new grid.
 set_grid_element(Grid, X, Y, E, Grid2) :-
-    Eid is Y * 9 + X,
-    split_at(Eid, Grid, Pre, [_|Post]),  % Exact element is first of Post, discard it
-    append([Pre, [E], Post], Grid2).  % put E where the discarded element was
+    argpos(X, Y, Eid), 
+    duplicate_term(Grid, Grid2),
+    nb_setarg(Eid, Grid2, E).
     
 % row_value(Grid, Y, Value)  is true if Value is found in row Y of grid.
 % excludes empty positions.
@@ -128,13 +133,47 @@ iterably_assign_proposed_value((X, Y), StartGrid, EndGrid) :-
      
      
 % given a possibly empty or partially solved grid
-% complete the solution!
-% using randomness, suitable for generating from blank, new puzzles
+% complete a solution!
+% using randomness, suitable for generating from blank, new puzzles; also suitable for puzzles with multiple solutions
 solve(StartGrid, EndGrid)  :-
     all_XY(XYS),      % when we randomized position order, solver was unreliable.
     foldl(iterably_assign_proposed_value, XYS, StartGrid, EndGrid).
     
+
+% a wrapper around propose_value, designed to be used in an iterative loop/foldl
+% fills in empty positions with UNIQUE valid value
+% the given coordinates may already be occupied by a value (useful for solving)    
+% in which case, we ASSUME the value is valid and move on with NO CHANGES.
+% will only fill in a value if a UNIQUE solution is available, otherwise, it ignores (leaves it blank)
+% thus, a single fold pass will likely not fill in all values
+iterably_assign_unique_proposed_value(Eid, StartGrid, EndGrid) :-
+    (argpos(X, Y, Eid),
+     read_grid_element(StartGrid, X, Y, empty_position), % see if the current value at the position is empty
+     bagof(Val, propose_value(StartGrid, X, Y, Val), [V]),  % if so, find all proposed values for this location and ensure there is exactly ONE
+     set_grid_element(StartGrid, X, Y, V, EndGrid)  % update the grid with the proposed value
+    ) ; EndGrid = StartGrid.  % otherwise, if the current value is non-empty, retain the grid unchanged.
+
+
+% if we believe there is a unique solution, then we can use this predicate.
+% it will fail to solve if there is no unique solution
+% therefore, it cannot be used generatively
+% howevr, it is much faster than solve.
+solve_unique_solution(StartGrid, EndGrid) :-
+    % find all empty positions by index id
+    bagof(Eid, arg(Eid, StartGrid, empty_position), EidS) -> % arg fails if no matching empty_positions
+    (
+        % if succeeded, means at least 1 empty position, apply the unique assigner
+        foldl(iterably_assign_unique_proposed_value, EidS, StartGrid, IntermediateGrid),
+        % and see if we made any progress?  If so, we'll continue
+        % if not, we fail.
+        StartGrid \= IntermediateGrid -> solve_unique_solution(IntermediateGrid, EndGrid)
+    ) ; (EndGrid = StartGrid).  % if theres no empty position, well then, we are done
+
     
+
+
+
+
 %%%%%%%%%%%%%%%%%%%%%%
 %% Sudoku puzzle
 %%%%%%%%%%%%%%%%%%%%%%
@@ -154,24 +193,24 @@ solve(StartGrid, EndGrid)  :-
 % Therefore, it's possible the "fill in from blank for a while" puzzle technique may fail.
 
 % punch_holes takes a full[er] grid, and a number of holes to punch, and punches that many holes
-punch_holes(Grid, 0, Grid) :- unique(solve(Grid, _)).  % ensure a single unique solution once all holes punched.
+punch_holes(Grid, 0, Grid) :- !.
 punch_holes(Grid, N, HGrid) :- 
     all_XY(XYS),
     random_permutation(XYS, RXYS),  % randomally consider all positions
     punch_holes(Grid, N, HGrid, RXYS).  % punch holes in that order.
 
-punch_holes(Grid, N, HGrid, [(X,Y)|XYS]) :-
+punch_holes(Grid, N, HGrid, [(X,Y)|XYS]) :-    
     punch_hole(Grid, X, Y, GridP) ->  % punch the hole if safe; did we safely punch this hole?
     ( 
-        NP is N - 1,  % if so, begin the recursive case - one less hole to punch
+        NP is N - 1,  % if so, begin the recursive case - one less hole to punch                
         punch_holes(GridP, NP, HGrid)
     ) ; punch_holes(Grid, N, HGrid, XYS).  % if not, discard this position from consideration and try again.
     
 
 punch_hole(Grid, X, Y, HGrid) :-    % punch the hole if stay
     \+ read_grid_element(Grid, X, Y, empty_position),  % ensure the location is not already empty
-    set_grid_element(Grid, X, Y, empty_position, HGrid), % empty the location
-    unique(propose_value(HGrid, X, Y, _)).  % check that exactly one value can go into the location.
+    set_grid_element(Grid, X, Y, empty_position, HGrid), % empty the location    
+    solve_unique_solution(HGrid, _).  % check that exactly one value can go into the location.
 
     % note: you may notice we check uniqueness twice - 
     % once when punching the hole (ensure only one possible value coudl go back and fill it)
@@ -192,7 +231,7 @@ make_puzzle(Difficulty, Puzzle, FullSolution) :-
     empty_grid(NX),
     solve(NX, FullSolution),
     !, % do not backtrack into the grid - if we got a grid, stick with it
-    punch_holes(FullSolution, Difficulty, Puzzle).
+    punch_holes(FullSolution, Difficulty, Puzzle).    
     
 
 
@@ -202,6 +241,7 @@ make_puzzle(Difficulty, Puzzle, FullSolution) :-
 write_g(empty_position) :- write("_"), !.
 write_g(X) :- write(X), !.
 
+print_grid(G) :- G =.. [grid | XS], print_grid(XS).
 print_grid([]) :- write("\n").
 print_grid([A, B, C, D, E, F, G, H, I|XS]) :-
     write_g(A), write_g(B), write_g(C), write(" "),

@@ -28,8 +28,8 @@ async function makePuzzle(difficulty) {
     prologInitialpuzzle = result[0].Puzzle;
 
     // replace the empty position with null
-    const nulledPuzzle = prologInitialpuzzle.map(x => x == 'empty_position' ? null : x);
-    return { initialPuzzleArray: nulledPuzzle, completedArray: result[0].FullSolution };
+    const nulledPuzzle = prologInitialpuzzle.grid.map(x => x == 'empty_position' ? null : x);
+    return { initialPuzzleArray: nulledPuzzle, completedArray: result[0].FullSolution.grid };
 
 }
 

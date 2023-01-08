@@ -222,23 +222,26 @@ function newGame() {
 }
 
 async function newGameSelected(e) {
+    document.getElementById('newGameButton').disabled = true;
+    document.getElementById('gameDesc').innerText = ` - INITIALIZING`;
     difficulty = e.target.value;
     if (!difficulty)
         difficulty = e.target.parentElement.value;
     // can you beleve this?  if you click on the h2 within the button e.target is set to the h2
 
-    document.getElementById('gameDesc').innerText = ` - ${difficulty}`;
+    
 
     // Create new puzzle
     let diffblanks;
     switch (difficulty) {
         case 'easy':
-        case 'medium':
-
             diffblanks = 35;
             break;
+        case 'medium':
+            diffblanks = 45;
+            break;
         case 'hard':
-            diffblanks = 40; // would like to do 45 but it hangs up
+            diffblanks = 55;
             break;
     }
     const result = await makePuzzle(diffblanks);
@@ -246,6 +249,8 @@ async function newGameSelected(e) {
     userArray = [...initialPuzzleArray]; // clone array
     completedArray = result.completedArray;
 
+    document.getElementById('gameDesc').innerText = ` - ${difficulty}`;
+    document.getElementById('newGameButton').disabled = false;
     initGrid();
 
     startTime = new Date().getTime();

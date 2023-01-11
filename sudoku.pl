@@ -89,7 +89,7 @@ block(V, VS) :-
     between(3, 5, V) -> between(3, 5, VS) ;
     between(6, 8, V) -> between(6, 8, VS).
 
-% block_pos(X, Y, BX, BY)  is true is X and Y are within the block described by BX and BY
+% block_pos(X, Y, BX, BY)  is true if X and Y are within the block described by BX and BY
 % this is primarily used to generate all block-relative positions to a given X, Y
 % so we can check what else is in the block.
 block_pos(X, Y, BX, BY) :-

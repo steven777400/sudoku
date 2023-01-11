@@ -15,7 +15,7 @@ replicate(Elem, Cnt, [Elem|XS]) :-
 % no.  It meant, give first solution.
 % need way to check that only ONE solution exists.
 unique(X) :-
-    aggregate_all(count, X, 1).
+    aggregate_all(count, limit(2, X), 1).
 
 %%%%%%%%%%%%%%%%%%%%%%
 %% Grid data structure
@@ -44,7 +44,9 @@ all_XY(XYS) :-
 % for now, we'll implement it both directions by hand.
 % arg is 1 based
 argpos(X, Y, Arg) :-
-    ground((X, Y)) -> Arg is Y * 9 + X + 1 ; (Y is div(Arg - 1, 9), X is mod(Arg - 1, 9)).
+    ground((X, Y)) -> 
+        Arg is Y * 9 + X + 1 ; 
+        (Y is div(Arg - 1, 9), X is mod(Arg - 1, 9)).
 
 % read_grid_element(Grid, X, Y, Element) maps the X and Y into the linear list
 % and matches the element there.
@@ -107,43 +109,46 @@ block_value(Grid, X, Y, Val) :-
 %% Sudoku rules/solver
 %%%%%%%%%%%%%%%%%%%%%%
 
+% value_consumed(Grid, X, Y, Val) is true if a particular Value
+% has already been consumed and is not available for the given X, Y
+value_consumed(Grid, X, Y, Val) :-
+    % note: disjunctions
+    col_value(Grid, X, Val) ;  % a value in the column would consume it for this location.
+    row_value(Grid, Y, Val) ; % a value in the row would consume it for this location
+    block_value(Grid, X, Y, Val).  % a value in the block would consume it for this location
+
 % propose_value(Grid, X, Y, Val) is designed to be used when X, Y is empty_position in the grid.
 % binds Val to all possible values, compliant with Sudoku rules/solver
 % considering row, column, and block uniqueness given existing values in the Grid.
 % note: Values are bound in random order to facilitate puzzle construction, this does not adversely impact solving.
 % propose_value can also be queried with all params instantiated to determine if a potential value is "plausible"
 % this doesn't mean its right, just that it can fit in the current grid situation.
-propose_value(Grid, X, Y, Val) :-        
-    random_permutation([1, 2, 3, 4, 5, 6, 7, 8, 9], RX),
-    member(Val, RX),
-    \+ col_value(Grid, X, Val),  % a proposed value must not exist in the column
-    \+ row_value(Grid, Y, Val), % a proposed value must not exist in the row
-    \+ block_value(Grid, X, Y, Val).  % a proposed value must not exist in the block
+propose_value(Grid, X, Y, Val) :-            
+    exclude(value_consumed(Grid, X, Y), [1, 2, 3, 4, 5, 6, 7, 8, 9], ValidItems),
+    random_permutation(ValidItems, RX),
+    member(Val, RX).
     
 
 % a wrapper around propose_value, designed to be used in an iterative loop/foldl
 % fills in all empty positions with valid values
-% the given coordinates may already be occupied by a value (useful for solving)    
-% in which case, we ASSUME the value is valid and move on with NO CHANGES.
-iterably_assign_proposed_value((X, Y), StartGrid, EndGrid) :-
-    read_grid_element(StartGrid, X, Y, empty_position) -> % see if the current value at the position is empty
-        (propose_value(StartGrid, X, Y, Val),  % if so, propose a new value for the position
-        set_grid_element(StartGrid, X, Y, Val, EndGrid)  % update the grid with the proposed value
-        ) ; EndGrid = StartGrid.  % otherwise, if the current value is non-empty, retain the grid unchanged.
-     
+iterably_assign_proposed_value(Eid, StartGrid, EndGrid) :-
+    argpos(X, Y, Eid),
+    propose_value(StartGrid, X, Y, Val),  % propose a new value for the position
+    set_grid_element(StartGrid, X, Y, Val, EndGrid).  % update the grid with the proposed value
+        
      
 % given a possibly empty or partially solved grid
 % complete a solution!
 % using randomness, suitable for generating from blank, new puzzles; also suitable for puzzles with multiple solutions
 solve(StartGrid, EndGrid)  :-
-    all_XY(XYS),      % when we randomized position order, solver was unreliable.
-    foldl(iterably_assign_proposed_value, XYS, StartGrid, EndGrid).
+    % find all empty positions    
+    findall(Eid, arg(Eid, StartGrid, empty_position), EidS),    
+    % iteratively fill them in
+    foldl(iterably_assign_proposed_value, EidS, StartGrid, EndGrid).
     
 
 % a wrapper around propose_value, designed to be used in an iterative loop/foldl
 % fills in empty positions with UNIQUE valid value
-% the given coordinates may already be occupied by a value (useful for solving)    
-% in which case, we ASSUME the value is valid and move on with NO CHANGES.
 % will only fill in a value if a UNIQUE solution is available, otherwise, it ignores (leaves it blank)
 % thus, a single fold pass will likely not fill in all values
 iterably_assign_unique_proposed_value(Eid, StartGrid, EndGrid) :-
@@ -165,9 +170,9 @@ solve_unique_solution(StartGrid, EndGrid) :-
         % if succeeded, means at least 1 empty position, apply the unique assigner
         foldl(iterably_assign_unique_proposed_value, EidS, StartGrid, IntermediateGrid),
         % and see if we made any progress?  If so, we'll continue
-        % if not, we fail.
-        StartGrid \= IntermediateGrid -> solve_unique_solution(IntermediateGrid, EndGrid)
-    ) ; (EndGrid = StartGrid).  % if theres no empty position, well then, we are done
+        % if not, switch to the generic solver.
+        (StartGrid \= IntermediateGrid -> solve_unique_solution(IntermediateGrid, EndGrid) ; solve(StartGrid, EndGrid))
+    ) ; (EndGrid = StartGrid).  % if theres no empty position, well then, we are done   
 
     
 
@@ -191,37 +196,28 @@ solve_unique_solution(StartGrid, EndGrid) :-
 % this failed a LOT - it turns out, filling in with systematically coordinates, but
 % randomizing the values from the allowed list, was a much more stable approach.
 % Therefore, it's possible the "fill in from blank for a while" puzzle technique may fail.
+% UPDATE: in a concurrent attempt, I used clpfd and incremental labeling - this did not go well. 
 
 % punch_holes takes a full[er] grid, and a number of holes to punch, and punches that many holes
-punch_holes(Grid, 0, Grid) :- !.
 punch_holes(Grid, N, HGrid) :- 
     all_XY(XYS),
     random_permutation(XYS, RXYS),  % randomally consider all positions
     punch_holes(Grid, N, HGrid, RXYS).  % punch holes in that order.
 
+punch_holes(Grid, 0, Grid, _) :- !.
 punch_holes(Grid, N, HGrid, [(X,Y)|XYS]) :-    
     punch_hole(Grid, X, Y, GridP) ->  % punch the hole if safe; did we safely punch this hole?
     ( 
         NP is N - 1,  % if so, begin the recursive case - one less hole to punch                
-        punch_holes(GridP, NP, HGrid)
+        punch_holes(GridP, NP, HGrid, XYS)
     ) ; punch_holes(Grid, N, HGrid, XYS).  % if not, discard this position from consideration and try again.
     
 
-punch_hole(Grid, X, Y, HGrid) :-    % punch the hole if stay
+punch_hole(Grid, X, Y, HGrid) :-    % punch the hole if safe
     \+ read_grid_element(Grid, X, Y, empty_position),  % ensure the location is not already empty
     set_grid_element(Grid, X, Y, empty_position, HGrid), % empty the location    
     solve_unique_solution(HGrid, _).  % check that exactly one value can go into the location.
 
-    % note: you may notice we check uniqueness twice - 
-    % once when punching the hole (ensure only one possible value coudl go back and fill it)
-    % and again, the whole puzzle, at the end with a solve command.
-    % reason: if we wait until the end,  there might be a lot of backtracking if we made a mistake early
-    % this leads to poor performance.  Although it does work.
-    % we still retain the end check, though, because the single proposed value check is insufficient
-    % example: we punch location A, only one value can go there; later we punch location B, only one
-    % value can go there, but, in doing so, now two values could go in A.  We don't "go back and check"
-    % I haven't verified this problem can actually happen, but it feels plausible.
- 
 
 % make_puzzle instantiates a Grid with as many holes as specified by Difficulty
 % A good rule seems to be Difficulty between 20 and 50.

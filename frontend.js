@@ -28,65 +28,73 @@ let timerTickInterval;
 // current difficulty
 let difficulty;
 
-function initGrid(paused) {
+async function initGrid(paused) {
     const container = document.getElementById('container');
     // REMOVE current grid entirely
     container.innerText = '';
+    
 
-    // create blocks (3x3 super blocks)
-    for (var by = 0; by < 3; by++) {
-        for (var bx = 0; bx < 3; bx++) {
-            const bdiv = document.createElement('div');
-            bdiv.classList.add('block');
-            //create individual cells (3x3) within each block
-            for (var y = 0; y < 3; y++) {
-                for (var x = 0; x < 3; x++) {
-                    const idiv = document.createElement('div');
-                    const gridy = by * 3 + y;
-                    const gridx = bx * 3 + x;
-                    // in the actual array, it is a linear 81 element array
-                    // calculate the index into that array
-                    const nid = gridy * 9 + gridx;
+    // create cells (3x3 super blocks)
+    for (let y = 0; y < 9; y++) {
+        for (let x = 0; x < 9; x++) {
+    
+            const idiv = document.createElement('div');
 
-                    // don't show anything if paused
-                    if (paused) {
+            // in the actual array, it is a linear 81 element array
+            // calculate the index into that array
+            const nid = y * 9 + x;
+
+            // don't show anything if paused
+            if (paused) {
+                idiv.innerText = '?';
+
+            } else {
+                switch (initialPuzzleArray[nid]) {
+                    case undefined: // array is not loaded!
                         idiv.innerText = '?';
+                        break;
+                    case null:
+                        // this is a user space - the user must fill in a value
 
-                    } else {
-                        switch (initialPuzzleArray[nid]) {
-                            case undefined: // array is not loaded!
-                                idiv.innerText = '?';
-                                break;
-                            case null:
-                                // this is a user space - the user must fill in a value
-
-                                // make button <button class="empty"></button>
-                                const btn = document.createElement('button');
-                                btn.dataset.x = gridx;
-                                btn.dataset.y = gridy;
-                                btn.dataset.id = nid;
-                                if (userArray[nid]) { // has the user already filed in a value?
-                                    btn.className = 'user';
-                                    btn.innerText = userArray[nid];
-                                } else {
-                                    btn.className = 'empty';
-                                }
-                                btn.addEventListener('click', gridBtnClick);
-                                idiv.append(btn);
-                                break;
-                            default:
-                                // this is a fixed value provided by the puzzle and cannot be changed
-                                idiv.innerText = initialPuzzleArray[nid];
-                                break;
-
+                        // make button <button class="empty"></button>
+                        const btn = document.createElement('button');
+                        btn.dataset.x = x;
+                        btn.dataset.y = y;
+                        btn.dataset.id = nid;
+                        if (userArray[nid]) { // has the user already filed in a value?
+                            btn.className = 'user';
+                            btn.innerText = userArray[nid];
+                        } else {
+                            btn.className = 'empty';
                         }
-                    }
-                    bdiv.append(idiv);
+                        btn.addEventListener('click', gridBtnClick);
+                        idiv.append(btn);
+                        break;
+                    default:
+                        // this is a fixed value provided by the puzzle and cannot be changed
+                        idiv.innerText = initialPuzzleArray[nid];
+                        break;
+
                 }
             }
-            container.append(bdiv);
+
+            const odiv = document.createElement('div');
+            odiv.className = 'block';
+            // set borders
+            const borders = await blockMaskBorder(x, y);
+            for (const border of borders) {
+                odiv.style[`margin-${border.Direction}`] = '3px';
+            }
+            
+
+            odiv.append(idiv);
+            container.append(odiv);
+        
+    
+    
         }
     }
+    
 }
 
 function assignButtonValue(value) {
@@ -241,7 +249,7 @@ async function newGameSelected(e) {
             diffblanks = 45;
             break;
         case 'hard':
-            diffblanks = 57;
+            diffblanks = 55;
             break;
     }
     const result = await makePuzzle(diffblanks);

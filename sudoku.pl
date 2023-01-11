@@ -78,29 +78,48 @@ col_value(Grid, X, Val) :-
 %%%%%%%%%%%%%%%%%%%%%%
 %% Blocks data structure
 %%%%%%%%%%%%%%%%%%%%%%
-    
+
+% the block mask, for the duration of the puzzle, defines the puzzle blocks
+% blockmask uses the same linear array notation as the grid, but each element is an identifier for the block
+% that is, all args of the same value in blockmask are part of the same block.  The identifier itself is not significant.
+:- dynamic blockmask/3.    
+
+% default, think square blocks.
 % blocks are 3x3 squares, such as (0,0) - (2,2); (3,0) - (5,2); (3,3) - (5,5); and (6,6) - (8,8)
+set_square_block_mask :-
+    all_XY(XYS),
+    retractall(blockmask(_, _, _)),
+    forall(member((X, Y), XYS), (
+        Bid is div(Y, 3) * 3 + div(X, 3),
+        assertz(blockmask(X, Y, Bid))
+    )).
+  
 
-% block(Pos, BlockPos) is true if Pos (an X or Y coordinate) is within the zone of the given BlockPos
-% for example, position 1 is in the block (0, 1, 2); position 6 is in the block (6, 7, 8)
-% this is identical for X and Y, so we don't care if position is X or Y.
-block(V, VS) :-
-    between(0, 2, V) -> between(0, 2, VS) ;
-    between(3, 5, V) -> between(3, 5, VS) ;
-    between(6, 8, V) -> between(6, 8, VS).
-
-% block_pos(X, Y, BX, BY)  is true if X and Y are within the block described by BX and BY
-% this is primarily used to generate all block-relative positions to a given X, Y
-% so we can check what else is in the block.
-block_pos(X, Y, BX, BY) :-
-    block(X, BX),
-    block(Y, BY).
+% block_adjacent(X, Y, Direction) is true if the position X, Y is on the edge of a block
+% and the edge is in the direction left, right, top, bottom
+% e.g. 1,2 is on the right edge
+% 3,3 is on both the top and left edge of its block
+block_adjacent(X, Y, Direction) :-
+    blockmask(X, Y, Block),
+    MX is X - 1, MY is Y - 1, PX is X + 1, PY is Y + 1,
+    (
+        % general pattern - if the adjacent blockmask identifier does NOT match this blockmask identifyer, its an edge
+        % note this will identify the far edges too, e.g. 0,0 will give top and left - since the lack of mask beyond the edge is a non match
+        % unclear if this is desired behavior
+        \+ blockmask(X, MY, Block), Direction = top ;
+        \+ blockmask(X, PY, Block), Direction = bottom ;
+        \+ blockmask(MX, Y, Block), Direction = left ;
+        \+ blockmask(PX, Y, Block), Direction = right
+    ).
 
 % block_value(Grid, X, Y, Value) is true if Value is an element in the block which contains X, Y
 % for example, if coordinate (3, 1) is given, then Value binds to all values in the block (3,0) - (5,2)
 % excludes empty positions.    
 block_value(Grid, X, Y, Val) :-
-    block_pos(X, Y, BX, BY),
+    % get the block mask value for the position
+    blockmask(X, Y, Block),
+    % now get all positions with that block mask
+    blockmask(BX, BY, Block),
     read_grid_element(Grid, BX, BY, Val),
     Val \= empty_position.
 

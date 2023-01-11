@@ -25,12 +25,12 @@
     <div id="container">
         <!-- populated by frontend.js:initGrid()
 
-        <div class="block">
+        
             <div>1</div>
             <div><button class="user">2</button></div>
             <div><button class="empty"></button></div>
           ...
-        </div>
+        
         ...
       -->
     </div>
@@ -78,6 +78,7 @@
     <script>
         initUI();
         initBackend().then(() => {
+            
             // enable new game once the backend is loaded
             document.getElementById('newGameButton').disabled = false;
         });

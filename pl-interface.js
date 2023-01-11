@@ -14,6 +14,8 @@ async function initBackend() {
     // Many servers refuse to dispense .pl directly!
     // so make sure this is allowed by some config
     await prologSession.consult("sudoku.pl");
+
+    prologSession.query("set_square_block_mask").once();
 }
 
 
@@ -36,5 +38,14 @@ async function makePuzzle(difficulty) {
 function checkPlausible(x, y, value) {
     return prologSession.query("propose_value(Grid, X, Y, Val)", { Grid: prologInitialpuzzle, X: x, Y: y, Val: value })
         .once().success;
+
+}
+
+async function blockMaskBorder(x, y) {
+    if (!prologSession) return [];
+    return await prologSession.forEach("block_adjacent(X, Y, Direction)", { X: x, Y: y });
+    
+    
+        
 
 }

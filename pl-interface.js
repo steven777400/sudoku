@@ -15,7 +15,7 @@ async function initBackend() {
     // so make sure this is allowed by some config
     await prologSession.consult("sudoku.pl");
 
-    prologSession.query("set_square_block_mask").once();
+    prologSession.query("square_blocks_grid(G), set_block_mask(G)").once();
 }
 
 

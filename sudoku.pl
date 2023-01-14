@@ -17,6 +17,10 @@ replicate(Elem, Cnt, [Elem|XS]) :-
 unique(X) :-
     aggregate_all(count, limit(2, X), 1).
 
+% any(XS) is true if the list XS has one or more elements
+any([_|_]).
+
+
 %%%%%%%%%%%%%%%%%%%%%%
 %% Grid data structure
 %%%%%%%%%%%%%%%%%%%%%%
@@ -51,12 +55,14 @@ argpos(X, Y, Arg) :-
 % read_grid_element(Grid, X, Y, Element) maps the X and Y into the linear list
 % and matches the element there.
 read_grid_element(Grid, X, Y, E) :-
+    between(0, 8, X), between(0, 8, Y),
     argpos(X, Y, Eid), 
     arg(Eid, Grid, E).
     
 % set_grid_element(Grid, X, Y, Element, NewGrid) replaces the grid element at X, Y
 % and binds it to new grid.
 set_grid_element(Grid, X, Y, E, Grid2) :-
+    between(0, 8, X), between(0, 8, Y),
     argpos(X, Y, Eid), 
     duplicate_term(Grid, Grid2),
     nb_setarg(Eid, Grid2, E).
@@ -80,17 +86,30 @@ col_value(Grid, X, Val) :-
 %%%%%%%%%%%%%%%%%%%%%%
 
 % the block mask, for the duration of the puzzle, defines the puzzle blocks
-% blockmask uses the same linear array notation as the grid, but each element is an identifier for the block
-% that is, all args of the same value in blockmask are part of the same block.  The identifier itself is not significant.
+% blockmask uses the same linear array notation as the grid, 
+% but each element is an identifier for the block
+% that is, all args of the same value in blockmask are part of the same block. 
+% The identifier itself should be 0 thru 8
+% NOTE: Solver will SORT BY block number, so you can use this as a hint
+% for performance.  Put blocks to solve first with lower numbers.
 :- dynamic blockmask/3.    
 
 % default, think square blocks.
 % blocks are 3x3 squares, such as (0,0) - (2,2); (3,0) - (5,2); (3,3) - (5,5); and (6,6) - (8,8)
-set_square_block_mask :-
+square_blocks_grid(Grid) :-
+    A = [0,0,0,1,1,1,2,2,2],
+    B = [3,3,3,4,4,4,5,5,5],
+    C = [6,6,6,7,7,7,8,8,8],
+
+    append([A,A,A,B,B,B,C,C,C], G),
+    Grid =.. [grid | G].
+
+
+set_block_mask(Grid) :-
     all_XY(XYS),
     retractall(blockmask(_, _, _)),
     forall(member((X, Y), XYS), (
-        Bid is div(Y, 3) * 3 + div(X, 3),
+        read_grid_element(Grid, X, Y, Bid),
         assertz(blockmask(X, Y, Bid))
     )).
   
@@ -123,7 +142,76 @@ block_value(Grid, X, Y, Val) :-
     read_grid_element(Grid, BX, BY, Val),
     Val \= empty_position.
 
-    
+%%%%%%%%%%%%%%%%%%%%%%
+%% Jigsaw Blocks generator
+%%%%%%%%%%%%%%%%%%%%%%
+
+manhattan_distance(X1, Y1, X2, Y2, Dist) :-
+    Dist is abs(X1 - X2) + abs(Y1 - Y2).
+
+grow_into(Grid, OriginBN, TargetBN, TX, TY) :-
+    arg(OEid, Grid, OriginBN),
+    argpos(OX, OY, OEid),
+
+    arg(TEid, Grid, TargetBN),
+    argpos(TX, TY, TEid),
+
+    % Manhattan Distance between these two locations must be exactly 1
+    manhattan_distance(OX, OY, TX, TY, 1).
+
+random_grow_into(Grid, OriginBN, TargetBN, Grid2) :-
+    bagof((TX, TY), grow_into(Grid, OriginBN, TargetBN, TX, TY), TXYS),
+    random_permutation( RTXYS, TXYS),
+    member((STX, STY), RTXYS),
+    set_grid_element(Grid, STX, STY, OriginBN, Grid2).
+
+jigsaw(Grid, Grid2) :-
+    GrowPair = [
+        (0, 1), (1, 2),         % first row horizontal
+        (0, 3), (1, 4), (2, 5), % first-second row vertical
+        (3, 4), (4, 5),         % second row horizontal
+        (3, 6), (4, 7), (5, 8), % second-third row vertical
+        (6, 7), (7, 8)          % third row horizontal 
+
+       %     (0, 1), (2, 5), (3, 4), (6, 7), (5, 8), (3, 6), (1, 2)
+      
+        ],
+    foldl([(OB, TB), StartGrid, EndGrid] >> (
+            random_grow_into(StartGrid, OB, TB, IG),
+            random_grow_into(IG, TB, OB, EndGrid),
+            StartGrid \= EndGrid,
+            validate(EndGrid)),
+        GrowPair, Grid, Grid2).
+
+% validate ensures that a grid is a valid mask
+% that all the values are contigous
+validate(Grid) :-
+    maplist(validate(Grid), [0, 1, 2, 3, 4, 5, 6, 7, 8]).
+
+validate(Grid, BlockNum) :-
+    findall((X, Y), (    
+            arg(OEid, Grid, BlockNum),
+            argpos(X, Y, OEid)
+        ), [X|XS]),
+    contigous([X], XS).
+
+
+% a list of X, Y positions
+% they must be contigous
+% so no subgroup is isolated
+% in other words, if we flood fill out from the first one
+% we must eventually find them all!
+contigous(_, []) :- !.
+contigous(Accepted, Pending) :-
+    partition({Accepted}/[(PX, PY)] >> (
+        member((X, Y), Accepted),
+        manhattan_distance(X, Y, PX, PY, 1) 
+    ), Pending, NewlyAccepted, StillPending),
+    any(NewlyAccepted),
+    append([Accepted, NewlyAccepted], CAccepted),
+    contigous(CAccepted, StillPending).
+
+
 %%%%%%%%%%%%%%%%%%%%%%
 %% Sudoku rules/solver
 %%%%%%%%%%%%%%%%%%%%%%
@@ -162,9 +250,37 @@ iterably_assign_proposed_value(Eid, StartGrid, EndGrid) :-
 solve(StartGrid, EndGrid)  :-
     % find all empty positions    
     findall(Eid, arg(Eid, StartGrid, empty_position), EidS),    
+    % trick I found online: fill in blocks on diagonal first
+    % we can rely on the block numbering to tell us about this
+    % and here simply sort the Eids by their block
+    % update: the diagonal thing made it worse
+    % I think when it gets way into the weeds it can get kind of stuck
+    % we need a way to "start over" or backtrack a lot?
+    % update 2: forget it, just use a timed retry for now, see below
+    % note: the sorting still helps a lot for jigsaw
+    predsort(eid_block_sort, EidS, SortedEidS),
     % iteratively fill them in
-    foldl(iterably_assign_proposed_value, EidS, StartGrid, EndGrid).
+    foldl(iterably_assign_proposed_value, SortedEidS, StartGrid, EndGrid).
     
+% see solve.  Used to sort Eids on the block -
+% performance improvement ONLY, not algorithmically needed
+eid_block_sort(Delta, Eid1, Eid2) :-
+    % calling Pred(-Delta, +E1, +E2) . This call must unify Delta with one of <, > or =. 
+    argpos(X1, Y1, Eid1), argpos(X2, Y2, Eid2),
+    blockmask(X1, Y1, B1), blockmask(X2, Y2, B2),
+    % haha remember sort removes duplicates by compare =
+    % what a nightmare lol, add the eid as a secondary key to avoid this
+    compare(Delta, B1-Eid1, B2-Eid2).
+
+
+
+retry_solve_time(Goal) :-
+    repeat, % infinite choice points
+    time(call_with_inference_limit(Goal, 1000000, R)),
+    % if it failed, it won't bind the vars
+    % if so, when we fail here, repeat will "move on" to the next choice point
+    % otherwise, ! means we stop processing successfully
+    (R == inference_limit_exceeded -> fail ; !).
 
 % a wrapper around propose_value, designed to be used in an iterative loop/foldl
 % fills in empty positions with UNIQUE valid value
@@ -243,12 +359,26 @@ punch_hole(Grid, X, Y, HGrid) :-    % punch the hole if safe
 % A good rule seems to be Difficulty between 20 and 50.
 % this can fail due to getting stuck. 
 % Puzzle is the version with holes, FullSolution is the completed solution.
-make_puzzle(Difficulty, Puzzle, FullSolution) :-        
+make_puzzle(Difficulty, Puzzle, FullSolution) :-    
+    square_blocks_grid(G),   
+    set_block_mask(G),  
     empty_grid(NX),
-    solve(NX, FullSolution),
+    time(solve(NX, FullSolution)),
     !, % do not backtrack into the grid - if we got a grid, stick with it
-    punch_holes(FullSolution, Difficulty, Puzzle).    
+    time(punch_holes(FullSolution, Difficulty, Puzzle)).    
     
+make_jigsaw_puzzle(Difficulty, Puzzle, FullSolution) :-
+    % some jigsaws are more ... solvable ... than others
+    empty_grid(NX),
+    square_blocks_grid(G), 
+    jigsaw(G, G2), 
+    set_block_mask(G2),
+    time(solve(NX, FullSolution)),
+    %time(retry_solve_time( ( 
+         
+    %    solve(NX, FullSolution)))),
+    !,
+    time(punch_holes(FullSolution, Difficulty, Puzzle)).
 
 
 %%%%%%%%%%%%%%%%%%%%%%

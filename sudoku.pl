@@ -45,8 +45,8 @@ all_XY(XYS) :-
 % arg is 1 based
 argpos(X, Y, Arg) :-
     ground((X, Y)) -> 
-        Arg is Y * 9 + X + 1 ; 
-        (Y is div(Arg - 1, 9), X is mod(Arg - 1, 9)).
+        Arg is Y * 9 + X + 1  
+    ;    (Y is div(Arg - 1, 9), X is mod(Arg - 1, 9)).
 
 % read_grid_element(Grid, X, Y, Element) maps the X and Y into the linear list
 % and matches the element there.
@@ -106,10 +106,10 @@ block_adjacent(X, Y, Direction) :-
         % general pattern - if the adjacent blockmask identifier does NOT match this blockmask identifyer, its an edge
         % note this will identify the far edges too, e.g. 0,0 will give top and left - since the lack of mask beyond the edge is a non match
         % unclear if this is desired behavior
-        \+ blockmask(X, MY, Block), Direction = top ;
-        \+ blockmask(X, PY, Block), Direction = bottom ;
-        \+ blockmask(MX, Y, Block), Direction = left ;
-        \+ blockmask(PX, Y, Block), Direction = right
+        \+ blockmask(X, MY, Block), Direction = top 
+    ;   \+ blockmask(X, PY, Block), Direction = bottom 
+    ;   \+ blockmask(MX, Y, Block), Direction = left 
+    ;   \+ blockmask(PX, Y, Block), Direction = right
     ).
 
 % block_value(Grid, X, Y, Value) is true if Value is an element in the block which contains X, Y
@@ -132,9 +132,9 @@ block_value(Grid, X, Y, Val) :-
 % has already been consumed and is not available for the given X, Y
 value_consumed(Grid, X, Y, Val) :-
     % note: disjunctions
-    col_value(Grid, X, Val) ;  % a value in the column would consume it for this location.
-    row_value(Grid, Y, Val) ; % a value in the row would consume it for this location
-    block_value(Grid, X, Y, Val).  % a value in the block would consume it for this location
+        col_value(Grid, X, Val)   % a value in the column would consume it for this location.
+    ;   row_value(Grid, Y, Val)  % a value in the row would consume it for this location
+    ;   block_value(Grid, X, Y, Val).  % a value in the block would consume it for this location
 
 % propose_value(Grid, X, Y, Val) is designed to be used when X, Y is empty_position in the grid.
 % binds Val to all possible values, compliant with Sudoku rules/solver
@@ -190,7 +190,8 @@ solve_unique_solution(StartGrid, EndGrid) :-
         foldl(iterably_assign_unique_proposed_value, EidS, StartGrid, IntermediateGrid),
         % and see if we made any progress?  If so, we'll continue
         % if not, switch to the generic solver.
-        (StartGrid \= IntermediateGrid -> solve_unique_solution(IntermediateGrid, EndGrid) ; solve(StartGrid, EndGrid))
+        (StartGrid \= IntermediateGrid -> solve_unique_solution(IntermediateGrid, EndGrid) 
+        ; solve(StartGrid, EndGrid))
     ) ; (EndGrid = StartGrid).  % if theres no empty position, well then, we are done   
 
     

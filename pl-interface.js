@@ -25,7 +25,7 @@ async function makePuzzle(difficulty) {
 
     // retry puzzle creation, as it can fail
     do {
-        result = await prologSession.forEach("make_puzzle(Difficulty, Puzzle, FullSolution)", { Difficulty: difficulty });
+        result = await prologSession.forEach("make_jigsaw_puzzle(Difficulty, Puzzle, FullSolution)", { Difficulty: difficulty });
     } while (result.length === 0);
     prologInitialpuzzle = result[0].Puzzle;
 

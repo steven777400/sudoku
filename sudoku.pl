@@ -276,7 +276,7 @@ eid_block_sort(Delta, Eid1, Eid2) :-
 
 retry_solve_time(Goal) :-
     repeat, % infinite choice points
-    time(call_with_inference_limit(Goal, 1000000, R)),
+    time(call_with_inference_limit(Goal, 1_000_000, R)),
     % if it failed, it won't bind the vars
     % if so, when we fail here, repeat will "move on" to the next choice point
     % otherwise, ! means we stop processing successfully
@@ -370,13 +370,11 @@ make_puzzle(Difficulty, Puzzle, FullSolution) :-
 make_jigsaw_puzzle(Difficulty, Puzzle, FullSolution) :-
     % some jigsaws are more ... solvable ... than others
     empty_grid(NX),
-    square_blocks_grid(G), 
-    jigsaw(G, G2), 
-    set_block_mask(G2),
-    time(solve(NX, FullSolution)),
-    %time(retry_solve_time( ( 
-         
-    %    solve(NX, FullSolution)))),
+    square_blocks_grid(G),
+    time(retry_solve_time( ( 
+        jigsaw(G, G2), 
+        set_block_mask(G2),
+        solve(NX, FullSolution)))),
     !,
     time(punch_holes(FullSolution, Difficulty, Puzzle)).
 

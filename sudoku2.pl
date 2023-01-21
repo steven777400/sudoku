@@ -79,12 +79,50 @@ jigsaw([0, 0, 1, 1, 1, 2, 2, 2, 2, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 0, 0, 0, 4, 1, 
 
 
 rdm_solve(G, S, S2) :-
-  jigsaw(G),
+ square_block_mask(G),
+  %jigsaw(G),
   sudoku(G, S),
   copy_term(S, S2),
   random_permutation(S2, SX),
   labeling([ff], SX).
+
+
+%%% can we make constraint based hole punching?
+% rdm_solve(G, S, S2), !,  hole_mask(S, S2, 80, M).
+hole_mask(Empty, Solved, NumHoles, Mask) :-
+  length(Mask, 81),
+  Mask ins 0..1,
+  global_cardinality(Mask, [0-NumHoles, 1-_]),
+  apply_hole_mask_step(Empty, Solved, Mask),
+label(Empty).
+  %label(Mask), ground(Empty).
   
+
+% this could be mapped and made non-recursive
+apply_hole_mask_step([], [] ,[]).
+apply_hole_mask_step([E|Empty], [S|Solved], [M|Mask]) :-
+  M #= 1 #==> E #= S,
+  apply_hole_mask_step(Empty, Solved, Mask).
+  
+%% boosted this from docs
+% fdset_size(+Set, -Size)
+% X in 1..10, Z in 1..10, Z #> X, isground(Z, 1), label([X,Z]).
+
+:- multifile clpfd:run_propagator/2.
+
+isground(X, Z) :-
+        clpfd:make_propagator(isground(X, Z), Prop),
+        clpfd:init_propagator(X, Prop),
+        clpfd:trigger_once(Prop).
+
+clpfd:run_propagator(isground(X, Z), MState) :-
+        (   fd_set(X, XS), fdset_size(XS, 1) -> clpfd:kill(MState), Z = 1
+        ;   true
+        ).
+
+%%%%% HOLE PUNCHING
+% rdm_solve(G, S, S2), !, punch_holes(S, S2, 80, H).
+
 
 punch_holes(Empty, Solved, N, Holes) :- 
   findall(Eid, between(1, 81, Eid), Eids),  
@@ -121,11 +159,8 @@ punch_hole(Empty, Solved, Eid, Holes) :-    % punch the hole if safe
     XEid \= Eid,
     \+ member(XEid, Holes)), Eids),  
   mesh(E2, Solved, Eids),
-  solve_unique_solution(E2).  % check that exactly one value can go into the location.
-
-solve_unique_solution(Grid) :-
-  copy_term(Grid, G2),
-  \+ offset(1, label(G2)).
+  ground(E2).
+ % \+ offset(1, label(E2)).
 
 
 

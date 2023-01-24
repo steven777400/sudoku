@@ -1,3 +1,4 @@
+:- use_module(library(lists)).
 :- use_module(library(clpfd)).
 
 listpos(X, Y, Eid) :-
@@ -86,157 +87,40 @@ rdm_solve(G, S, S2) :-
   random_permutation(S2, SX),
   labeling([ff], SX).
 
-
-%%% can we make constraint based hole punching?
-% rdm_solve(G, S, S2), !,  hole_mask(S, S2, 80, M).
-hole_mask(Empty, Solved, NumHoles, Mask) :-
-  length(Mask, 81),
-  Mask ins 0..1,
-  global_cardinality(Mask, [0-NumHoles, 1-_]),
-  apply_hole_mask_step(Empty, Solved, Mask),
-label(Empty).
-  %label(Mask), ground(Empty).
-  
-
-% this could be mapped and made non-recursive
-apply_hole_mask_step([], [] ,[]).
-apply_hole_mask_step([E|Empty], [S|Solved], [M|Mask]) :-
-  M #= 1 #==> E #= S,
-  apply_hole_mask_step(Empty, Solved, Mask).
-  
-%% boosted this from docs
-% fdset_size(+Set, -Size)
-% X in 1..10, Z in 1..10, Z #> X, isground(Z, 1), label([X,Z]).
-
-:- multifile clpfd:run_propagator/2.
-
-isground(X, Z) :-
-        clpfd:make_propagator(isground(X, Z), Prop),
-        clpfd:init_propagator(X, Prop),
-        clpfd:trigger_once(Prop).
-
-clpfd:run_propagator(isground(X, Z), MState) :-
-        (   fd_set(X, XS), fdset_size(XS, 1) -> clpfd:kill(MState), Z = 1
-        ;   true
-        ).
-
-%%%%% HOLE PUNCHING
-% rdm_solve(G, S, S2), !, punch_holes(S, S2, 80, H).
+label_next_member(Puzzle, Solution, Idx) :-
+  % need to find the min fd_size index in puzzle,
+  % then apply the exact value from solution (just labeling is not sufficient)
+  maplist(fd_size, Puzzle, PuzzleS),  
+  max_list(PuzzleS, MinPFD),  
+  nth1(Idx, PuzzleS, MinPFD),
+  write(Idx), write(": "), write(MinPFD), write("\n"),
+  nth1(Idx, Solution, SolvedValue),
+  nth1(Idx, Puzzle, PuzzleValue),
+  PuzzleValue #= SolvedValue.
 
 
-punch_holes(Empty, Solved, N, Holes) :- 
-  findall(Eid, between(1, 81, Eid), Eids),  
-  random_permutation(Eids, REids),
-  punch_holes(Empty, Solved, N, [], REids, Holes).  % punch holes in that order.
-
-punch_holes(_, _, 0, OutHoles, _, OutHoles) :- !.
-punch_holes(Empty, Solved, N, Holes, [Eid|Eids], OH) :-   
-  length(Holes, HN),
-  write(HN), write(": "), write(Eid), write("\n"), 
-  punch_hole(Empty, Solved, Eid, Holes) ->  % punch the hole if safe; did we safely punch this hole?
-  ( 
-      Np #= N - 1,  % if so, begin the recursive case - one less hole to punch                
-      punch_holes(Empty, Solved, Np, [Eid|Holes], Eids, OH)
-  ) ; punch_holes(Empty, Solved, N, Holes, Eids, OH).  % if not, discard this position from consideration and try again.
-  
-
-mesh(_, _, []).
-mesh([E|EX], [S|SX], Eids) :-
-  maplist(plus(-1), Eids, MEids),
-  [Eid|REids] = MEids,
-  (Eid == 0 -> (
-    E #= S,
-    mesh(EX, SX, REids)
-  ) ; (
-    mesh(EX, SX, MEids)
-  )).
-
-
-punch_hole(Empty, Solved, Eid, Holes) :-    % punch the hole if safe
-  copy_term(Empty, E2),
-  findall(XEid, (
-    between(1, 81, XEid),
-    XEid \= Eid,
-    \+ member(XEid, Holes)), Eids),  
-  mesh(E2, Solved, Eids),
-  ground(E2).
- % \+ offset(1, label(E2)).
-
+label_to_uniqueness(Puzzle, Solution, LabeledIdxs) :-
+  % cannot  use repeat!  reason: choice points backtrack, which erases the labels
+    label_next_member(Puzzle, Solution, Idx),
+    copy_term(Puzzle, S3),
+    (offset(1, label(S3)) -> (label_to_uniqueness(Puzzle, Solution, IdxS), LabeledIdxs = [Idx|IdxS]) ; !).
 
 
 %%%%% OLD STUFFF
 
 
-whole_puzzle(LabeledS, S, NumSols) :-
-  square_block_mask(BlockMask),
-  sudoku(BlockMask, S),
-  write("a\n"),
-  copy_term(S, LabeledS),
-  %random_permutation(S, LabeledS),
-  findall(Eid, between(1, 81, Eid), Eids),  
-  random_permutation(Eids, REids),
-  maplist({LabeledS}/[Eid]>>(element(Eid, LabeledS, E), label([E])), REids),
-  write("b\n"),
-  label(LabeledS),
-  write("c\n"),
-  punch_holes(LabeledS, S, 30),
-  aggregate_all(count, label(S), NumSols).
+%%%%%%%%%%%%%%%%%%%%%%
+%% REPL debug display
+%%%%%%%%%%%%%%%%%%%%%%    
+write_g(X) :- (ground(X) -> write(X) ; write("_")), !.
 
-ground_elem(LabeledS, PuzzleS, N) :-
-  write("x\n"),
-  element(N, LabeledS, Value),
-  element(N, PuzzleS, PuzzleElem),
-  PuzzleElem #= Value.
-
-punch_holes(LabeledS, S, N) :-
-  findall(Eid, between(1, 81, Eid), Eids),  
-  random_permutation(Eids, REids),
-  take(REids, N, TEids),
-  maplist({LabeledS, S}/[E]>>(ground_elem(LabeledS, S, E)), TEids).
-  
-
-
-
-
-
-
-
-prelabel(_, 0, _).
-prelabel(S, N, [R|REids]) :-
-  element(R, S, RElem), 
-  label([RElem]),
-  Np #= N - 1,
-  prelabel(S, Np, REids).
-
-
-
-puzzle(S2, TEids) :-
-  square_block_mask(BlockMask),
-  sudoku(BlockMask, S),
-  findall(Eid, between(1, 81, Eid), Eids),  
-  repeat, 
-    copy_term(S, S2),
-    random_permutation(Eids, REids),
-    % apply a minimum number of labels to start with to ensure search space tractable
-    take(REids, 35, TEids),
-    maplist({S2}/[N, E]>>(element(N, S2, E)), TEids, Elems),
-    write(TEids),
-    write(S2),
-    once(labeling([ff], Elems)),
-%    prelabel(S2, 35, REids),
-    % TODO continue labeling until solution unique?
-    write(Elems),
-    write("x\n"),
-    copy_term(S2, S3),
-    (offset(1, label(S3)) -> fail 
-    ; !).
-
-%puzzle(S) :-
-%  square_block_mask(BlockMask),
-%  sudoku(BlockMask, S),  
-%  random_permutation(S, RS),
-%  label(RS).
-  
-%  offset(1, (puzzle(S), label(S))). ensure this fails = one solution
-% https://eu.swi-prolog.org/pldoc/man?section=solutionsequences
-
+print_grid(G) :- G =.. [grid | XS], print_grid(XS).
+print_grid([]) :- write("\n").
+print_grid([A, B, C, D, E, F, G, H, I|XS]) :-
+    write_g(A), write_g(B), write_g(C), write(" "),
+    write_g(D), write_g(E), write_g(F), write(" "),
+    write_g(G), write_g(H), write_g(I), write(" "),
+    write("\n"), print_grid(XS).
+    
+    
+    

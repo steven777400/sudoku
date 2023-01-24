@@ -47,10 +47,20 @@ all_XY(XYS) :-
 % because "is" does not work both ways (we could use constraint programming here actually)
 % for now, we'll implement it both directions by hand.
 % arg is 1 based
-argpos(X, Y, Arg) :-
+c_argpos(X, Y, Arg) :-
     ground((X, Y)) -> 
         Arg is Y * 9 + X + 1  
     ;    (Y is div(Arg - 1, 9), X is mod(Arg - 1, 9)).
+
+:- dynamic argpos/3.    
+set_argpos :-
+    all_XY(XYS),
+    retractall(argpos(_, _, _)),
+    forall(member((X, Y), XYS), (
+        Arg is Y * 9 + X + 1,
+        assertz(argpos(X, Y, Arg))
+    )).
+  
 
 % read_grid_element(Grid, X, Y, Element) maps the X and Y into the linear list
 % and matches the element there.
@@ -232,8 +242,8 @@ value_consumed(Grid, X, Y, Val) :-
 % this doesn't mean its right, just that it can fit in the current grid situation.
 propose_value(Grid, X, Y, Val) :-            
     exclude(value_consumed(Grid, X, Y), [1, 2, 3, 4, 5, 6, 7, 8, 9], ValidItems),
-    random_permutation(ValidItems, RX),
-    member(Val, RX).
+    %random_permutation(ValidItems, RX),
+    member(Val, ValidItems).
     
 
 % a wrapper around propose_value, designed to be used in an iterative loop/foldl

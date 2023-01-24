@@ -15,7 +15,7 @@ async function initBackend() {
     // so make sure this is allowed by some config
     await prologSession.consult("sudoku.pl");
 
-    prologSession.query("square_blocks_grid(G), set_block_mask(G)").once();
+    prologSession.query("set_argpos, square_blocks_grid(G), set_block_mask(G)").once();
 }
 
 
@@ -42,7 +42,7 @@ function checkPlausible(x, y, value) {
 }
 
 async function blockMaskBorder(x, y) {
-    if (!prologSession) return [];
+    if (!prologSession) return []; // this is called before the backend is spun up, so need an escape hatch
     return await prologSession.forEach("block_adjacent(X, Y, Direction)", { X: x, Y: y });
     
     

@@ -156,6 +156,19 @@ block_value(Grid, X, Y, Val) :-
 %% Jigsaw Blocks generator
 %%%%%%%%%%%%%%%%%%%%%%
 
+diamond_blocks_grid(Grid) :-
+    G =
+    [0,0,0,0,1,2,2,2,2,
+     0,0,0,1,1,1,2,2,2,
+     0,0,1,1,1,1,1,2,2,
+     3,3,3,4,4,4,5,5,5,
+     3,3,3,4,4,4,5,5,5,
+     3,3,3,4,4,4,5,5,5,
+     6,6,7,7,7,7,7,8,8,
+     6,6,6,7,7,7,8,8,8,
+     6,6,6,6,7,8,8,8,8],
+     Grid =.. [grid | G].
+
 manhattan_distance(X1, Y1, X2, Y2, Dist) :-
     Dist is abs(X1 - X2) + abs(Y1 - Y2).
 
@@ -175,22 +188,52 @@ random_grow_into(Grid, OriginBN, TargetBN, Grid2) :-
     member((STX, STY), RTXYS),
     set_grid_element(Grid, STX, STY, OriginBN, Grid2).
 
+grow_select(S) :-
+    GrowPair = [
+        (0-1), (1-2),         % first row horizontal
+        (0-3), (1-4), (2-5), % first-second row vertical
+        (3-4), (4-5),         % second row horizontal
+        (3-6), (4-7), (5-8), % second-third row vertical
+        (6-7), (7-8)          % third row horizontal
+    ],
+    transpose_pairs(GrowPair, IGP),
+    append([GrowPair, IGP], GPS),
+    grow_select(GPS, S).
+
+grow_select([], []).
+grow_select(GrowPair, [A-B, B-C | S]) :-
+    random_permutation(GrowPair, RGP1),
+    member((A-B), RGP1),
+    random_permutation(GrowPair, RGP2),
+    member((B-C), RGP2),
+    foldl()
+    subtract(GrowPair, [B-_, _-B, A-_, _-C], Reduced),
+    grow_select(Reduced, S).
+
+
+
+
+
+
 jigsaw(Grid, Grid2) :-
     GrowPair = [
-        (0, 1), (1, 2),         % first row horizontal
-        (0, 3), (1, 4), (2, 5), % first-second row vertical
-        (3, 4), (4, 5),         % second row horizontal
-        (3, 6), (4, 7), (5, 8), % second-third row vertical
-        (6, 7), (7, 8)          % third row horizontal 
+        %(0, 1), (1, 2),         % first row horizontal
+        %(0, 3), (1, 4), (2, 5), % first-second row vertical
+        %(3, 4), (4, 5),         % second row horizontal
+        %(3, 6), (4, 7), (5, 8), % second-third row vertical
+        %(6, 7), (7, 8)          % third row horizontal        
 
-       %     (0, 1), (2, 5), (3, 4), (6, 7), (5, 8), (3, 6), (1, 2)
-      
+
+% TODO: Random pick pair that's both sides unused?  from all possible pairs    
+
+         (0, 1), (2, 5), (3, 4), (6, 7)
         ],
     foldl([(OB, TB), StartGrid, EndGrid] >> (
             random_grow_into(StartGrid, OB, TB, IG),
-            random_grow_into(IG, TB, OB, EndGrid),
+            random_grow_into(IG, TB, OB, EndGrid),            
             StartGrid \= EndGrid,
-            validate(EndGrid)),
+            validate(EndGrid)
+            ),
         GrowPair, Grid, Grid2).
 
 % validate ensures that a grid is a valid mask
@@ -203,6 +246,7 @@ validate(Grid, BlockNum) :-
             arg(OEid, Grid, BlockNum),
             argpos(X, Y, OEid)
         ), [X|XS]),
+    length(XS, 8),
     contigous([X], XS).
 
 
@@ -220,6 +264,7 @@ contigous(Accepted, Pending) :-
     any(NewlyAccepted),
     append([Accepted, NewlyAccepted], CAccepted),
     contigous(CAccepted, StillPending).
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%
@@ -242,8 +287,8 @@ value_consumed(Grid, X, Y, Val) :-
 % this doesn't mean its right, just that it can fit in the current grid situation.
 propose_value(Grid, X, Y, Val) :-            
     exclude(value_consumed(Grid, X, Y), [1, 2, 3, 4, 5, 6, 7, 8, 9], ValidItems),
-    %random_permutation(ValidItems, RX),
-    member(Val, ValidItems).
+    random_permutation(ValidItems, RX),
+    member(Val, RX).
     
 
 % a wrapper around propose_value, designed to be used in an iterative loop/foldl
@@ -253,40 +298,33 @@ iterably_assign_proposed_value(Eid, StartGrid, EndGrid) :-
     propose_value(StartGrid, X, Y, Val),  % propose a new value for the position
     set_grid_element(StartGrid, X, Y, Val, EndGrid).  % update the grid with the proposed value
         
-     
+
+count_options(Grid, Eid, N) :-
+    argpos(X, Y, Eid),
+    aggregate_all(count, propose_value(Grid, X, Y, _), N).
+
 % given a possibly empty or partially solved grid
 % complete a solution!
 % using randomness, suitable for generating from blank, new puzzles; also suitable for puzzles with multiple solutions
 solve(StartGrid, EndGrid)  :-
     % find all empty positions    
-    findall(Eid, arg(Eid, StartGrid, empty_position), EidS),    
-    % trick I found online: fill in blocks on diagonal first
-    % we can rely on the block numbering to tell us about this
-    % and here simply sort the Eids by their block
-    % update: the diagonal thing made it worse
-    % I think when it gets way into the weeds it can get kind of stuck
-    % we need a way to "start over" or backtrack a lot?
-    % update 2: forget it, just use a timed retry for now, see below
-    % note: the sorting still helps a lot for jigsaw
-    predsort(eid_block_sort, EidS, SortedEidS),
-    % iteratively fill them in
-    foldl(iterably_assign_proposed_value, SortedEidS, StartGrid, EndGrid).
+    % along with how many options each position has    
+    bagof(Cnt-Eid, (arg(Eid, StartGrid, empty_position), count_options(StartGrid, Eid, Cnt)), EidS) -> (    
+        % sort to find the position with fewest options                
+        keysort(EidS, [MCnt-Eid|_]),
+        % fill in that position, if possible        
+        iterably_assign_proposed_value(Eid, StartGrid, IG),        
+        solve(IG, EndGrid))
     
-% see solve.  Used to sort Eids on the block -
-% performance improvement ONLY, not algorithmically needed
-eid_block_sort(Delta, Eid1, Eid2) :-
-    % calling Pred(-Delta, +E1, +E2) . This call must unify Delta with one of <, > or =. 
-    argpos(X1, Y1, Eid1), argpos(X2, Y2, Eid2),
-    blockmask(X1, Y1, B1), blockmask(X2, Y2, B2),
-    % haha remember sort removes duplicates by compare =
-    % what a nightmare lol, add the eid as a secondary key to avoid this
-    compare(Delta, B1-Eid1, B2-Eid2).
+    % if no empty positions, the solution is complete
+    ; EndGrid = StartGrid.
+
 
 
 
 retry_solve_time(Goal) :-
     repeat, % infinite choice points
-    time(call_with_inference_limit(Goal, 1_000_000, R)),
+    time(call_with_inference_limit(Goal, 10_000_000, R)),
     % if it failed, it won't bind the vars
     % if so, when we fail here, repeat will "move on" to the next choice point
     % otherwise, ! means we stop processing successfully
@@ -316,8 +354,8 @@ solve_unique_solution(StartGrid, EndGrid) :-
         foldl(iterably_assign_unique_proposed_value, EidS, StartGrid, IntermediateGrid),
         % and see if we made any progress?  If so, we'll continue
         % if not, switch to the generic solver.
-        (StartGrid \= IntermediateGrid -> solve_unique_solution(IntermediateGrid, EndGrid) 
-        ; solve(StartGrid, EndGrid))
+        StartGrid \= IntermediateGrid -> solve_unique_solution(IntermediateGrid, EndGrid) 
+        
     ) ; (EndGrid = StartGrid).  % if theres no empty position, well then, we are done   
 
     
@@ -362,6 +400,7 @@ punch_holes(Grid, N, HGrid, [(X,Y)|XYS]) :-
 punch_hole(Grid, X, Y, HGrid) :-    % punch the hole if safe
     \+ read_grid_element(Grid, X, Y, empty_position),  % ensure the location is not already empty
     set_grid_element(Grid, X, Y, empty_position, HGrid), % empty the location    
+    % unique(solve(HGrid, _)).
     solve_unique_solution(HGrid, _).  % check that exactly one value can go into the location.
 
 
@@ -370,21 +409,23 @@ punch_hole(Grid, X, Y, HGrid) :-    % punch the hole if safe
 % this can fail due to getting stuck. 
 % Puzzle is the version with holes, FullSolution is the completed solution.
 make_puzzle(Difficulty, Puzzle, FullSolution) :-    
-    square_blocks_grid(G),   
+    diamond_blocks_grid(G),   
     set_block_mask(G),  
     empty_grid(NX),
     time(solve(NX, FullSolution)),
     !, % do not backtrack into the grid - if we got a grid, stick with it
     time(punch_holes(FullSolution, Difficulty, Puzzle)).    
     
-make_jigsaw_puzzle(Difficulty, Puzzle, FullSolution) :-
+make_jigsaw_puzzle(Difficulty, BlockMask, Puzzle, FullSolution) :-
     % some jigsaws are more ... solvable ... than others
     empty_grid(NX),
     square_blocks_grid(G),
-    time(retry_solve_time( ( 
-        jigsaw(G, G2), 
-        set_block_mask(G2),
-        solve(NX, FullSolution)))),
+    retry_solve_time( ( 
+        jigsaw(G, BlockMask), 
+        set_block_mask(BlockMask),
+        print_grid(BlockMask),
+        !,
+        solve(NX, FullSolution))),
     !,
     time(punch_holes(FullSolution, Difficulty, Puzzle)).
 

@@ -80,8 +80,8 @@ jigsaw([0, 0, 1, 1, 1, 2, 2, 2, 2, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 0, 0, 0, 4, 1, 
 
 
 rdm_solve(G, S, S2) :-
- square_block_mask(G),
-  %jigsaw(G),
+ %square_block_mask(G),
+  jigsaw(G),
   sudoku(G, S),
   copy_term(S, S2),
   random_permutation(S2, SX),

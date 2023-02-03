@@ -224,6 +224,8 @@ function newGame() {
 
     // this will just fill it with ?s
     completedArray = userArray = initialPuzzleArray = [];
+    // and we want to reset to a square block mask
+    setSquareBlockMask();
     initGrid();
 
     document.getElementById('newGameDialog').showModal();
@@ -243,7 +245,7 @@ async function newGameSelected(e) {
     let diffblanks;
     switch (difficulty) {
         case 'easy':
-            diffblanks = 35;
+            diffblanks = 45;
             break;
         case 'medium':
             diffblanks = 45;

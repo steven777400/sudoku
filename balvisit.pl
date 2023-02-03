@@ -45,12 +45,14 @@ once_visitor(Edges, [A-B|Visit]) :-
   % once we originate from A and arrive at B, we want no other consider with
   % this start and end point
   filter_out(Edges, [A-_, _-B], REdges),
+  % it would be better to remove conceptual duplicates,
+  % A-B,B-A and B-A,A-B are the same thing in this sense, and should only count as one option.
+  maplist(compare(<, A-B), REdges),
   once_visitor(REdges, Visit).
+  
 
 % balanced visitor produces all permutations
 % but if we want to select one, say, at random,
-% it would be better to remove conceptual duplicates,
-% A-B,B-A and B-A,A-B are the same thing in this sense, and should only count as one option.
 % this should only be used for generation, not for checking
 % since it removes valid but 
 %% so_balanced_visitor(++Edges, --VisitSet)

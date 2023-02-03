@@ -18,6 +18,9 @@ async function initBackend() {
     prologSession.query("set_argpos, square_blocks_grid(G), set_block_mask(G)").once();
 }
 
+function setSquareBlockMask() {
+    prologSession.query("square_blocks_grid(G), set_block_mask(G)").once();
+}
 
 
 async function makePuzzle(difficulty) {
@@ -25,7 +28,7 @@ async function makePuzzle(difficulty) {
 
     // retry puzzle creation, as it can fail
     do {
-        result = await prologSession.forEach("make_jigsaw_puzzle(Difficulty, Puzzle, FullSolution)", { Difficulty: difficulty });
+        result = await prologSession.forEach("make_jigsaw_puzzle(Difficulty, _, Puzzle, FullSolution)", { Difficulty: difficulty });
     } while (result.length === 0);
     prologInitialpuzzle = result[0].Puzzle;
 

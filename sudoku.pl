@@ -1,5 +1,5 @@
 %% Suduko puzzle and solver
-
+:- use_module(balvisit).
 %%% Utility
 
 
@@ -183,7 +183,7 @@ grow_into(Grid, OriginBN, TargetBN, TX, TY) :-
     manhattan_distance(OX, OY, TX, TY, 1).
 
 random_grow_into(Grid, OriginBN, TargetBN, Grid2) :-
-    bagof((TX, TY), grow_into(Grid, OriginBN, TargetBN, TX, TY), TXYS),
+    setof((TX, TY), grow_into(Grid, OriginBN, TargetBN, TX, TY), TXYS),
     random_permutation( RTXYS, TXYS),
     member((STX, STY), RTXYS),
     set_grid_element(Grid, STX, STY, OriginBN, Grid2).
@@ -198,43 +198,17 @@ grow_select(S) :-
     ],
     transpose_pairs(GrowPair, IGP),
     append([GrowPair, IGP], GPS),
-    grow_select(GPS, S).
-
-grow_select([], []).
-grow_select(GrowPair, [A-B, B-C | S]) :-
-    random_permutation(GrowPair, RGP1),
-    member((A-B), RGP1),
-    random_permutation(GrowPair, RGP2),
-    member((B-C), RGP2),
-    foldl()
-    subtract(GrowPair, [B-_, _-B, A-_, _-C], Reduced),
-    grow_select(Reduced, S).
-
-
-
-
-
+    so_balanced_visitor(GPS, VS),
+    random_permutation(VS, [S|_]).
 
 jigsaw(Grid, Grid2) :-
-    GrowPair = [
-        %(0, 1), (1, 2),         % first row horizontal
-        %(0, 3), (1, 4), (2, 5), % first-second row vertical
-        %(3, 4), (4, 5),         % second row horizontal
-        %(3, 6), (4, 7), (5, 8), % second-third row vertical
-        %(6, 7), (7, 8)          % third row horizontal        
-
-
-% TODO: Random pick pair that's both sides unused?  from all possible pairs    
-
-         (0, 1), (2, 5), (3, 4), (6, 7)
-        ],
-    foldl([(OB, TB), StartGrid, EndGrid] >> (
-            random_grow_into(StartGrid, OB, TB, IG),
-            random_grow_into(IG, TB, OB, EndGrid),            
-            StartGrid \= EndGrid,
-            validate(EndGrid)
+    grow_select(GrowPair),
+    write(GrowPair), write("\n"),
+    foldl([OB-TB, StartGrid, EndGrid] >> (
+            random_grow_into(StartGrid, OB, TB, EndGrid)
             ),
-        GrowPair, Grid, Grid2).
+        GrowPair, Grid, Grid2),
+    validate(Grid2).
 
 % validate ensures that a grid is a valid mask
 % that all the values are contigous
@@ -264,6 +238,14 @@ contigous(Accepted, Pending) :-
     any(NewlyAccepted),
     append([Accepted, NewlyAccepted], CAccepted),
     contigous(CAccepted, StillPending).
+
+
+complexity(Grid, Complexity) :-
+    aggregate_all(sum(L), (
+        setof(V, col_value(Grid, XY, V), CS), length(CS, LCS),
+        setof(V, row_value(Grid, XY, V), RS), length(RS, LRS),
+        L is LCS + LRS
+    ), Complexity).
 
 
 
@@ -320,15 +302,6 @@ solve(StartGrid, EndGrid)  :-
     ; EndGrid = StartGrid.
 
 
-
-
-retry_solve_time(Goal) :-
-    repeat, % infinite choice points
-    time(call_with_inference_limit(Goal, 10_000_000, R)),
-    % if it failed, it won't bind the vars
-    % if so, when we fail here, repeat will "move on" to the next choice point
-    % otherwise, ! means we stop processing successfully
-    (R == inference_limit_exceeded -> fail ; !).
 
 % a wrapper around propose_value, designed to be used in an iterative loop/foldl
 % fills in empty positions with UNIQUE valid value
@@ -409,12 +382,22 @@ punch_hole(Grid, X, Y, HGrid) :-    % punch the hole if safe
 % this can fail due to getting stuck. 
 % Puzzle is the version with holes, FullSolution is the completed solution.
 make_puzzle(Difficulty, Puzzle, FullSolution) :-    
-    diamond_blocks_grid(G),   
+    square_blocks_grid(G),   
     set_block_mask(G),  
     empty_grid(NX),
     time(solve(NX, FullSolution)),
     !, % do not backtrack into the grid - if we got a grid, stick with it
     time(punch_holes(FullSolution, Difficulty, Puzzle)).    
+    
+
+
+retry_solve_time(Goal) :-
+    repeat, % infinite choice points
+        time(call_with_inference_limit(Goal, 5_000_000, R)),
+        % if it failed, it won't bind the vars
+        % if so, when we fail here, repeat will "move on" to the next choice point
+        % otherwise, ! means we stop processing successfully
+        (R == inference_limit_exceeded -> fail ; !).
     
 make_jigsaw_puzzle(Difficulty, BlockMask, Puzzle, FullSolution) :-
     % some jigsaws are more ... solvable ... than others
@@ -423,7 +406,6 @@ make_jigsaw_puzzle(Difficulty, BlockMask, Puzzle, FullSolution) :-
     retry_solve_time( ( 
         jigsaw(G, BlockMask), 
         set_block_mask(BlockMask),
-        print_grid(BlockMask),
         !,
         solve(NX, FullSolution))),
     !,

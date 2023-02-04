@@ -33,6 +33,15 @@ body {
     border: none;
 }
 
+.horz {
+    display: flex;
+    flex-direction: row;
+}
+
+p {
+    margin-top: 1.5em;
+    margin-bottom: 0.2em;
+}
 
 .block>div {
     border: 1px solid black;
@@ -120,6 +129,20 @@ dialog>form>.block>div {
 
 #chooseNumberDialog .block button:disabled {
     background-color: gray;
+}
+
+.toggles button {
+    width: auto;
+    color: black;
+    background-color: lightgray;
+    padding: 0.5em 0.5em 0.5em 0.5em;
+
+}
+
+.toggles button.selected {
+    color: white;
+    background-color: darkslategray;
+
 }
 
 button.difficulty {

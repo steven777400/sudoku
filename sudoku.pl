@@ -180,7 +180,15 @@ grow_into(Grid, OriginBN, TargetBN, TX, TY) :-
     argpos(TX, TY, TEid),
 
     % Manhattan Distance between these two locations must be exactly 1
-    manhattan_distance(OX, OY, TX, TY, 1).
+    manhattan_distance(OX, OY, TX, TY, 1),
+
+    % it's not a "grow into" if it restores the original layout
+    square_blocks_grid(G),
+    % it must not be the case that the target id has the origin block number
+    % in the original square grid
+    % if it were the case, it means the growth is actually restoring the original
+    % squares.
+    \+ arg(TEid, G, OriginBN).
 
 random_grow_into(Grid, OriginBN, TargetBN, Grid2) :-
     setof((TX, TY), grow_into(Grid, OriginBN, TargetBN, TX, TY), TXYS),
@@ -201,7 +209,8 @@ grow_select(S) :-
     so_balanced_visitor(GPS, VS),
     random_permutation(VS, [S|_]).
 
-jigsaw(Grid, Grid2) :-
+jigsaw(Grid2) :-
+    square_blocks_grid(Grid),
     grow_select(GrowPair),
     write(GrowPair), write("\n"),
     foldl([OB-TB, StartGrid, EndGrid] >> (
@@ -293,7 +302,7 @@ solve(StartGrid, EndGrid)  :-
     % along with how many options each position has    
     bagof(Cnt-Eid, (arg(Eid, StartGrid, empty_position), count_options(StartGrid, Eid, Cnt)), EidS) -> (    
         % sort to find the position with fewest options                
-        keysort(EidS, [MCnt-Eid|_]),
+        keysort(EidS, [_-Eid|_]),
         % fill in that position, if possible        
         iterably_assign_proposed_value(Eid, StartGrid, IG),        
         solve(IG, EndGrid))
@@ -381,7 +390,7 @@ punch_hole(Grid, X, Y, HGrid) :-    % punch the hole if safe
 % A good rule seems to be Difficulty between 20 and 50.
 % this can fail due to getting stuck. 
 % Puzzle is the version with holes, FullSolution is the completed solution.
-make_puzzle(Difficulty, Puzzle, FullSolution) :-    
+make_square_puzzle(Difficulty, Puzzle, FullSolution) :-    
     square_blocks_grid(G),   
     set_block_mask(G),  
     empty_grid(NX),
@@ -399,12 +408,11 @@ retry_solve_time(Goal) :-
         % otherwise, ! means we stop processing successfully
         (R == inference_limit_exceeded -> fail ; !).
     
-make_jigsaw_puzzle(Difficulty, BlockMask, Puzzle, FullSolution) :-
+make_jigsaw_puzzle(Difficulty, Puzzle, FullSolution) :-
     % some jigsaws are more ... solvable ... than others
     empty_grid(NX),
-    square_blocks_grid(G),
     retry_solve_time( ( 
-        jigsaw(G, BlockMask), 
+        jigsaw(BlockMask), 
         set_block_mask(BlockMask),
         !,
         solve(NX, FullSolution))),

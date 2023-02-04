@@ -25,8 +25,8 @@ let totalTime;
 // the interval object used to tick the timer
 let timerTickInterval;
 
-// current difficulty
-let difficulty;
+// indicates if we provide guidance
+let autoGuidance;
 
 async function initGrid(paused) {
     const container = document.getElementById('container');
@@ -128,7 +128,7 @@ function gridBtnClick(e) {
     document.querySelectorAll('#chooseNumberDialog .block button').forEach(b => {
         // on "easy" mode, we oly allow plausible numbers from initial puzzle state
         // if we did from current puzzle state, we might prevent correct answers!
-        if (difficulty === 'easy') {
+        if (autoGuidance) {
             const proposed = Number(b.value);
             const x = Number(buttonClicked.dataset.x);
             const y = Number(buttonClicked.dataset.y);
@@ -195,11 +195,8 @@ function setGameSuspended(suspended) {
     }
     document.getElementById('pauseButton').disabled = suspended;
     document.getElementById('resumeButton').disabled = !suspended;
-    if (difficulty === 'hard') {
-        document.getElementById('hintButton').disabled = true;
-    } else {
-        document.getElementById('hintButton').disabled = suspended;
-    }
+    document.getElementById('hintButton').disabled = suspended;
+    
 }
 
 function pauseGame() {
@@ -234,32 +231,17 @@ function newGame() {
 async function newGameSelected(e) {
     document.getElementById('newGameButton').disabled = true;
     document.getElementById('gameDesc').innerText = ` - INITIALIZING`;
-    difficulty = e.target.value;
-    if (!difficulty)
-        difficulty = e.target.parentElement.value;
-    // can you beleve this?  if you click on the h2 within the button e.target is set to the h2
 
-    
+    const shape = document.querySelector('#tgShape button.selected').value;
+    const diffblanks = Number(document.querySelector('#tgDifficulty button.selected').value);
+    autoGuidance = document.querySelector('#tgAutoGuidance button.selected').value === 'true';
 
-    // Create new puzzle
-    let diffblanks;
-    switch (difficulty) {
-        case 'easy':
-            diffblanks = 45;
-            break;
-        case 'medium':
-            diffblanks = 45;
-            break;
-        case 'hard':
-            diffblanks = 55;
-            break;
-    }
-    const result = await makePuzzle(diffblanks);
+    const result = await makePuzzle(shape, diffblanks);
     initialPuzzleArray = result.initialPuzzleArray;
     userArray = [...initialPuzzleArray]; // clone array
     completedArray = result.completedArray;
 
-    document.getElementById('gameDesc').innerText = ` - ${difficulty}`;
+    document.getElementById('gameDesc').innerText = '';
     document.getElementById('newGameButton').disabled = false;
     initGrid();
 
@@ -299,6 +281,13 @@ function hint() {
 
 }
 
+function toggleButtonClicked(e) {
+    e.target.parentElement.querySelectorAll('button').forEach(b => b.className = '');
+    e.target.className = 'selected';
+    
+    e.stopPropagation();
+}
+
 function initUI() {
 
     document.querySelectorAll('#chooseNumberDialog button').forEach(b => b.addEventListener('click', chooserBtnClick));
@@ -319,8 +308,11 @@ function initUI() {
     document.getElementById('newGameButton').addEventListener('click', newGame);
     document.getElementById('hintButton').addEventListener('click', hint);
 
-    // within the new dialog, wire up the buttons
-    document.querySelectorAll('#newGameDialog button.difficulty').forEach(b => b.addEventListener('click', newGameSelected));
+    // wire up all toggle buttons
+    document.querySelectorAll('.toggles button').forEach(b => b.addEventListener('click', toggleButtonClicked));
+
+    document.getElementById('newGameForm').addEventListener('submit', newGameSelected);
+
 
     // this allows the user to click outside a dialog to cancel/close the dialog
     document.querySelectorAll('dialog').forEach(b => {

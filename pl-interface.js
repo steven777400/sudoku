@@ -23,12 +23,12 @@ function setSquareBlockMask() {
 }
 
 
-async function makePuzzle(difficulty) {
+async function makePuzzle(shape, difficulty) {
     let result;
 
     // retry puzzle creation, as it can fail
     do {
-        result = await prologSession.forEach("make_jigsaw_puzzle(Difficulty, _, Puzzle, FullSolution)", { Difficulty: difficulty });
+        result = await prologSession.forEach(`make_${shape}_puzzle(Difficulty, Puzzle, FullSolution)`, { Difficulty: difficulty });
     } while (result.length === 0);
     prologInitialpuzzle = result[0].Puzzle;
 

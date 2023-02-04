@@ -64,12 +64,31 @@
     </dialog>
 
     <dialog id="newGameDialog">
-        <form method="dialog">
+        <form method="dialog" id="newGameForm">
             <div>
-                <p>Select Game Difficulty</p>
-                <button class="difficulty" value="easy"><h2>Easy</h2> Few empty squares. Guidance on number selection. Hints available.</button>
-                <button class="difficulty" value="medium"><h2>Medium</h2> Few empty squares. No guidance on number selection, but hints available.</button>
-                <button class="difficulty" value="hard"><h2>Normal</h2> Moderate empty squares. No help. (allow 20+ seconds to initialize)</button>
+
+                <p>Shape</p>
+                <div class="toggles" id="tgShape">
+                    <button type="button" class="selected" value="square">Square</button>
+                    <button type="button" value="jigsaw">Random Rippled</button>
+                </div>
+                
+
+                <p>Select Empty Squares</p>
+                <div class="toggles" id="tgDifficulty">
+                    <button type="button" value="35">Few</button>
+                    <button type="button" value="45" class="selected">Medium</button>
+                    <button type="button" value="55">More</button>
+                </div>
+
+                <p>Easy Mode?</p>
+                <div class="toggles" id="tgAutoGuidance">
+                    <button type="button" value="true">Yes</button>
+                    <button type="button" value="false" class="selected">No</button>
+                </div>
+
+                <p>Make your selections above, then:</p>
+                <button>Start!</button>
                 <button value="cancel">Cancel</button>
             </div>
         </form>
@@ -81,6 +100,7 @@
             
             // enable new game once the backend is loaded
             document.getElementById('newGameButton').disabled = false;
+            console.log("Completed init");
         });
     </script>
 <footer>

@@ -255,29 +255,20 @@ async function newGameSelected(e) {
 function hint() {
     // what is a hint?  Could be lots of things
     // if the user has made mistakes, mark them
-    // if not, propose a new value
-
-    // we'll focus on marking wrong but prepare to propose a new value
-    // this list will serve to indicate all available blank spaces in the current user array
-    let currentBlanks = []
-    let markedWrong = false;
+    // NO MORE: if not, propose a new value
+    // only check!
+    
     for (let nid = 0; nid < 81; nid++) {
-        // if they've put in a value, but its the wrong value
-        if (userArray[nid] && completedArray[nid] !== userArray[nid]) {
-            document.querySelector(`button[data-id='${nid}']`).className = 'hint-incorrect';
-            markedWrong = true;
-        } else if (!userArray[nid]) {
-            currentBlanks.push(nid);
-        }
+        // if they've put in a value, themselves, not part of origin
+        if (userArray[nid] && !initialPuzzleArray[nid]) {
+            if (completedArray[nid] !== userArray[nid]) {
+                document.querySelector(`button[data-id='${nid}']`).className = 'hint-incorrect';
+            } else {
+                document.querySelector(`button[data-id='${nid}']`).className = 'success';
+            }
+        } 
     }
-    if (markedWrong) return;
-
-    const randomElement = currentBlanks[Math.floor(Math.random() * currentBlanks.length)];
-    userArray[randomElement] = completedArray[randomElement];
-    document.querySelector(`button[data-id='${randomElement}']`).className = 'hint-proposed';
-    document.querySelector(`button[data-id='${randomElement}']`).innerText = completedArray[randomElement];
-
-    checkCompletion(); // in case its the last loc
+    
 
 }
 

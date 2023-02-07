@@ -1,15 +1,10 @@
 %% Suduko puzzle and solver
-:- use_module(balvisit).
+
+:- use_module(grid).
+:- use_module(jigsaw).
 %%% Utility
 
 
-% **** BUILTIN in Tau-Prolog but not in SWI-Prolog    
-% replicate(Element, Count, FullList)
-
-replicate(_, 0, []) :- !.
-replicate(Elem, Cnt, [Elem|XS]) :-
-    Ncnt is Cnt - 1,
-    replicate(Elem, Ncnt, XS).
 
 % I used "once" becaue I thought it meant succeed if exactly one solution
 % no.  It meant, give first solution.
@@ -17,79 +12,9 @@ replicate(Elem, Cnt, [Elem|XS]) :-
 unique(X) :-
     aggregate_all(count, limit(2, X), 1).
 
-% any(XS) is true if the list XS has one or more elements
-any([_|_]).
 
 
-%%%%%%%%%%%%%%%%%%%%%%
-%% Grid data structure
-%%%%%%%%%%%%%%%%%%%%%%
 
-% empty_position is a constant atom indicating an empty position
-% considered several grid options - such as nested loops or assert'd terms
-% ended up with a linear list with the square representation abstracted on top.
-
-% an empty grid is 9*9 = 81 empty positions.
-
-% originally used a list to represent the grid, but read and set were very slow in aggregate
-% using a term allows constant access instead of a linked list, more like an array.
-empty_grid(Grid) :- 
-    replicate(empty_position, 81, G), 
-    Grid =.. [grid | G].
-
-% all_XY is, in list of tuple form, all allowed (X, Y) positions in the grid
-all_XY(XYS) :-
-    bagof((X, Y), (
-        between(0, 8, X),
-        between(0, 8, Y)
-     ), XYS).
-
-% because "is" does not work both ways (we could use constraint programming here actually)
-% for now, we'll implement it both directions by hand.
-% arg is 1 based
-c_argpos(X, Y, Arg) :-
-    ground((X, Y)) -> 
-        Arg is Y * 9 + X + 1  
-    ;    (Y is div(Arg - 1, 9), X is mod(Arg - 1, 9)).
-
-:- dynamic argpos/3.    
-set_argpos :-
-    all_XY(XYS),
-    retractall(argpos(_, _, _)),
-    forall(member((X, Y), XYS), (
-        Arg is Y * 9 + X + 1,
-        assertz(argpos(X, Y, Arg))
-    )).
-  
-
-% read_grid_element(Grid, X, Y, Element) maps the X and Y into the linear list
-% and matches the element there.
-read_grid_element(Grid, X, Y, E) :-
-    between(0, 8, X), between(0, 8, Y),
-    argpos(X, Y, Eid), 
-    arg(Eid, Grid, E).
-    
-% set_grid_element(Grid, X, Y, Element, NewGrid) replaces the grid element at X, Y
-% and binds it to new grid.
-set_grid_element(Grid, X, Y, E, Grid2) :-
-    between(0, 8, X), between(0, 8, Y),
-    argpos(X, Y, Eid), 
-    duplicate_term(Grid, Grid2),
-    nb_setarg(Eid, Grid2, E).
-    
-% row_value(Grid, Y, Value)  is true if Value is found in row Y of grid.
-% excludes empty positions.
-row_value(Grid, Y, Val) :-    
-    between(0, 8, Id),
-    read_grid_element(Grid, Id, Y, Val),
-    Val \= empty_position.
-
-% col_value(Grid, X, Value)  is true if Value is found in column X of grid.
-% excludes empty positions.    
-col_value(Grid, X, Val) :-
-    between(0, 8, Id),
-    read_grid_element(Grid, X, Id, Val),
-    Val \= empty_position.
     
 %%%%%%%%%%%%%%%%%%%%%%
 %% Blocks data structure
@@ -102,159 +27,46 @@ col_value(Grid, X, Val) :-
 % The identifier itself should be 0 thru 8
 % NOTE: Solver will SORT BY block number, so you can use this as a hint
 % for performance.  Put blocks to solve first with lower numbers.
-:- dynamic blockmask/3.    
-
-% default, think square blocks.
-% blocks are 3x3 squares, such as (0,0) - (2,2); (3,0) - (5,2); (3,3) - (5,5); and (6,6) - (8,8)
-square_blocks_grid(Grid) :-
-    A = [0,0,0,1,1,1,2,2,2],
-    B = [3,3,3,4,4,4,5,5,5],
-    C = [6,6,6,7,7,7,8,8,8],
-
-    append([A,A,A,B,B,B,C,C,C], G),
-    Grid =.. [grid | G].
+:- dynamic blockmask/2.    
 
 
 set_block_mask(Grid) :-
     all_XY(XYS),
-    retractall(blockmask(_, _, _)),
-    forall(member((X, Y), XYS), (
-        read_grid_element(Grid, X, Y, Bid),
-        assertz(blockmask(X, Y, Bid))
+    retractall(blockmask(_, _)),
+    forall(member(X-Y, XYS), (
+        read_grid_element(Grid, X-Y, Bid),
+        assertz(blockmask(X-Y, Bid))
     )).
   
 
-% block_adjacent(X, Y, Direction) is true if the position X, Y is on the edge of a block
+% block_adjacent(X-Y, Direction) is true if the position X-Y is on the edge of a block
 % and the edge is in the direction left, right, top, bottom
 % e.g. 1,2 is on the right edge
 % 3,3 is on both the top and left edge of its block
-block_adjacent(X, Y, Direction) :-
-    blockmask(X, Y, Block),
+block_adjacent(X-Y, Direction) :-
+    blockmask(X-Y, Block),
     MX is X - 1, MY is Y - 1, PX is X + 1, PY is Y + 1,
     (
         % general pattern - if the adjacent blockmask identifier does NOT match this blockmask identifyer, its an edge
         % note this will identify the far edges too, e.g. 0,0 will give top and left - since the lack of mask beyond the edge is a non match
         % unclear if this is desired behavior
-        \+ blockmask(X, MY, Block), Direction = top 
-    ;   \+ blockmask(X, PY, Block), Direction = bottom 
-    ;   \+ blockmask(MX, Y, Block), Direction = left 
-    ;   \+ blockmask(PX, Y, Block), Direction = right
+        \+ blockmask(X-MY, Block), Direction = top 
+    ;   \+ blockmask(X-PY, Block), Direction = bottom 
+    ;   \+ blockmask(MX-Y, Block), Direction = left 
+    ;   \+ blockmask(PX-Y, Block), Direction = right
     ).
 
-% block_value(Grid, X, Y, Value) is true if Value is an element in the block which contains X, Y
+% block_value(Grid, X-Y, Value) is true if Value is an element in the block which contains X-Y
 % for example, if coordinate (3, 1) is given, then Value binds to all values in the block (3,0) - (5,2)
 % excludes empty positions.    
-block_value(Grid, X, Y, Val) :-
+block_value(Grid, X-Y, Val) :-
     % get the block mask value for the position
-    blockmask(X, Y, Block),
+    blockmask(X-Y, Block),
     % now get all positions with that block mask
-    blockmask(BX, BY, Block),
-    read_grid_element(Grid, BX, BY, Val),
+    blockmask(BX-BY, Block),
+    read_grid_element(Grid, BX-BY, Val),
     Val \= empty_position.
 
-%%%%%%%%%%%%%%%%%%%%%%
-%% Jigsaw Blocks generator
-%%%%%%%%%%%%%%%%%%%%%%
-
-diamond_blocks_grid(Grid) :-
-    G =
-    [0,0,0,0,1,2,2,2,2,
-     0,0,0,1,1,1,2,2,2,
-     0,0,1,1,1,1,1,2,2,
-     3,3,3,4,4,4,5,5,5,
-     3,3,3,4,4,4,5,5,5,
-     3,3,3,4,4,4,5,5,5,
-     6,6,7,7,7,7,7,8,8,
-     6,6,6,7,7,7,8,8,8,
-     6,6,6,6,7,8,8,8,8],
-     Grid =.. [grid | G].
-
-manhattan_distance(X1, Y1, X2, Y2, Dist) :-
-    Dist is abs(X1 - X2) + abs(Y1 - Y2).
-
-grow_into(Grid, OriginBN, TargetBN, TX, TY) :-
-    arg(OEid, Grid, OriginBN),
-    argpos(OX, OY, OEid),
-
-    arg(TEid, Grid, TargetBN),
-    argpos(TX, TY, TEid),
-
-    % Manhattan Distance between these two locations must be exactly 1
-    manhattan_distance(OX, OY, TX, TY, 1),
-
-    % it's not a "grow into" if it restores the original layout
-    square_blocks_grid(G),
-    % it must not be the case that the target id has the origin block number
-    % in the original square grid
-    % if it were the case, it means the growth is actually restoring the original
-    % squares.
-    \+ arg(TEid, G, OriginBN).
-
-random_grow_into(Grid, OriginBN, TargetBN, Grid2) :-
-    setof((TX, TY), grow_into(Grid, OriginBN, TargetBN, TX, TY), TXYS),
-    random_permutation( RTXYS, TXYS),
-    member((STX, STY), RTXYS),
-    set_grid_element(Grid, STX, STY, OriginBN, Grid2).
-
-grow_select(S) :-
-    GrowPair = [
-        (0-1), (1-2),         % first row horizontal
-        (0-3), (1-4), (2-5), % first-second row vertical
-        (3-4), (4-5),         % second row horizontal
-        (3-6), (4-7), (5-8), % second-third row vertical
-        (6-7), (7-8)          % third row horizontal
-    ],
-    transpose_pairs(GrowPair, IGP),
-    append([GrowPair, IGP], GPS),
-    so_balanced_visitor(GPS, VS),
-    random_permutation(VS, [S|_]).
-
-jigsaw(Grid2) :-
-    square_blocks_grid(Grid),
-    grow_select(GrowPair),
-    write(GrowPair), write("\n"),
-    foldl([OB-TB, StartGrid, EndGrid] >> (
-            random_grow_into(StartGrid, OB, TB, EndGrid)
-            ),
-        GrowPair, Grid, Grid2),
-    validate(Grid2).
-
-% validate ensures that a grid is a valid mask
-% that all the values are contigous
-validate(Grid) :-
-    maplist(validate(Grid), [0, 1, 2, 3, 4, 5, 6, 7, 8]).
-
-validate(Grid, BlockNum) :-
-    findall((X, Y), (    
-            arg(OEid, Grid, BlockNum),
-            argpos(X, Y, OEid)
-        ), [X|XS]),
-    length(XS, 8),
-    contigous([X], XS).
-
-
-% a list of X, Y positions
-% they must be contigous
-% so no subgroup is isolated
-% in other words, if we flood fill out from the first one
-% we must eventually find them all!
-contigous(_, []) :- !.
-contigous(Accepted, Pending) :-
-    partition({Accepted}/[(PX, PY)] >> (
-        member((X, Y), Accepted),
-        manhattan_distance(X, Y, PX, PY, 1) 
-    ), Pending, NewlyAccepted, StillPending),
-    any(NewlyAccepted),
-    append([Accepted, NewlyAccepted], CAccepted),
-    contigous(CAccepted, StillPending).
-
-
-complexity(Grid, Complexity) :-
-    aggregate_all(sum(L), (
-        setof(V, col_value(Grid, XY, V), CS), length(CS, LCS),
-        setof(V, row_value(Grid, XY, V), RS), length(RS, LRS),
-        L is LCS + LRS
-    ), Complexity).
 
 
 
@@ -262,22 +74,22 @@ complexity(Grid, Complexity) :-
 %% Sudoku rules/solver
 %%%%%%%%%%%%%%%%%%%%%%
 
-% value_consumed(Grid, X, Y, Val) is true if a particular Value
-% has already been consumed and is not available for the given X, Y
-value_consumed(Grid, X, Y, Val) :-
+% value_consumed(Grid, X-Y, Val) is true if a particular Value
+% has already been consumed and is not available for the given X-Y
+value_consumed(Grid, X-Y, Val) :-
     % note: disjunctions
         col_value(Grid, X, Val)   % a value in the column would consume it for this location.
     ;   row_value(Grid, Y, Val)  % a value in the row would consume it for this location
-    ;   block_value(Grid, X, Y, Val).  % a value in the block would consume it for this location
+    ;   block_value(Grid, X-Y, Val).  % a value in the block would consume it for this location
 
-% propose_value(Grid, X, Y, Val) is designed to be used when X, Y is empty_position in the grid.
+% propose_value(Grid, X-Y, Val) is designed to be used when X-Y is empty_position in the grid.
 % binds Val to all possible values, compliant with Sudoku rules/solver
 % considering row, column, and block uniqueness given existing values in the Grid.
 % note: Values are bound in random order to facilitate puzzle construction, this does not adversely impact solving.
 % propose_value can also be queried with all params instantiated to determine if a potential value is "plausible"
 % this doesn't mean its right, just that it can fit in the current grid situation.
-propose_value(Grid, X, Y, Val) :-            
-    exclude(value_consumed(Grid, X, Y), [1, 2, 3, 4, 5, 6, 7, 8, 9], ValidItems),
+propose_value(Grid, X-Y, Val) :-            
+    exclude(value_consumed(Grid, X-Y), [1, 2, 3, 4, 5, 6, 7, 8, 9], ValidItems),
     random_permutation(ValidItems, RX),
     member(Val, RX).
     
@@ -285,14 +97,14 @@ propose_value(Grid, X, Y, Val) :-
 % a wrapper around propose_value, designed to be used in an iterative loop/foldl
 % fills in all empty positions with valid values
 iterably_assign_proposed_value(Eid, StartGrid, EndGrid) :-
-    argpos(X, Y, Eid),
-    propose_value(StartGrid, X, Y, Val),  % propose a new value for the position
-    set_grid_element(StartGrid, X, Y, Val, EndGrid).  % update the grid with the proposed value
+    argpos(X-Y, Eid),
+    propose_value(StartGrid, X-Y, Val),  % propose a new value for the position
+    set_grid_element(StartGrid, X-Y, Val, EndGrid).  % update the grid with the proposed value
         
 
 count_options(Grid, Eid, N) :-
-    argpos(X, Y, Eid),
-    aggregate_all(count, propose_value(Grid, X, Y, _), N).
+    argpos(X-Y, Eid),
+    aggregate_all(count, propose_value(Grid, X-Y, _), N).
 
 % given a possibly empty or partially solved grid
 % complete a solution!
@@ -317,10 +129,10 @@ solve(StartGrid, EndGrid)  :-
 % will only fill in a value if a UNIQUE solution is available, otherwise, it ignores (leaves it blank)
 % thus, a single fold pass will likely not fill in all values
 iterably_assign_unique_proposed_value(Eid, StartGrid, EndGrid) :-
-    (argpos(X, Y, Eid),
-     read_grid_element(StartGrid, X, Y, empty_position), % see if the current value at the position is empty
-     bagof(Val, propose_value(StartGrid, X, Y, Val), [V]),  % if so, find all proposed values for this location and ensure there is exactly ONE
-     set_grid_element(StartGrid, X, Y, V, EndGrid)  % update the grid with the proposed value
+    (argpos(X-Y, Eid),
+     read_grid_element(StartGrid, X-Y, empty_position), % see if the current value at the position is empty
+     bagof(Val, propose_value(StartGrid, X-Y, Val), [V]),  % if so, find all proposed values for this location and ensure there is exactly ONE
+     set_grid_element(StartGrid, X-Y, V, EndGrid)  % update the grid with the proposed value
     ) ; EndGrid = StartGrid.  % otherwise, if the current value is non-empty, retain the grid unchanged.
 
 
@@ -371,17 +183,17 @@ punch_holes(Grid, N, HGrid) :-
     punch_holes(Grid, N, HGrid, RXYS).  % punch holes in that order.
 
 punch_holes(Grid, 0, Grid, _) :- !.
-punch_holes(Grid, N, HGrid, [(X,Y)|XYS]) :-    
-    punch_hole(Grid, X, Y, GridP) ->  % punch the hole if safe; did we safely punch this hole?
+punch_holes(Grid, N, HGrid, [X-Y|XYS]) :-    
+    punch_hole(Grid, X-Y, GridP) ->  % punch the hole if safe; did we safely punch this hole?
     ( 
         NP is N - 1,  % if so, begin the recursive case - one less hole to punch                
         punch_holes(GridP, NP, HGrid, XYS)
     ) ; punch_holes(Grid, N, HGrid, XYS).  % if not, discard this position from consideration and try again.
     
 
-punch_hole(Grid, X, Y, HGrid) :-    % punch the hole if safe
-    \+ read_grid_element(Grid, X, Y, empty_position),  % ensure the location is not already empty
-    set_grid_element(Grid, X, Y, empty_position, HGrid), % empty the location    
+punch_hole(Grid, X-Y, HGrid) :-    % punch the hole if safe
+    \+ read_grid_element(Grid, X-Y, empty_position),  % ensure the location is not already empty
+    set_grid_element(Grid, X-Y, empty_position, HGrid), % empty the location    
     % unique(solve(HGrid, _)).
     solve_unique_solution(HGrid, _).  % check that exactly one value can go into the location.
 

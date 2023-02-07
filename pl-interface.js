@@ -39,14 +39,14 @@ async function makePuzzle(shape, difficulty) {
 }
 
 function checkPlausible(x, y, value) {
-    return prologSession.query("propose_value(Grid, X, Y, Val)", { Grid: prologInitialpuzzle, X: x, Y: y, Val: value })
+    return prologSession.query("propose_value(Grid, X-Y, Val)", { Grid: prologInitialpuzzle, X: x, Y: y, Val: value })
         .once().success;
 
 }
 
 async function blockMaskBorder(x, y) {
     if (!prologSession) return []; // this is called before the backend is spun up, so need an escape hatch
-    return await prologSession.forEach("block_adjacent(X, Y, Direction)", { X: x, Y: y });
+    return await prologSession.forEach("block_adjacent(X-Y, Direction)", { X: x, Y: y });
     
     
         

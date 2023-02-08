@@ -33,7 +33,7 @@ async function makePuzzle(shape, difficulty) {
     prologInitialpuzzle = result[0].Puzzle;
 
     // replace the empty position with null
-    const nulledPuzzle = prologInitialpuzzle.grid.map(x => x == 'empty_position' ? null : x);
+    const nulledPuzzle = prologInitialpuzzle.grid.map(x => x == 'empty_position' ? [] : [x]);
     return { initialPuzzleArray: nulledPuzzle, completedArray: result[0].FullSolution.grid };
 
 }

@@ -56,18 +56,20 @@ p {
 }
 
 
-
 button {
-    font-size: 4vmin;
+    font-size: 3vmin;
 }
 
 .block>div>button {
     all: unset;
     width: 95%;
     height: 95%;
-    color: white;
-    background-color: darkslategray;
+    background-color: lightgray;
+    color: darkslategray;
     ;
+}
+.block>div>button.multi {
+    font-size: 3vmin;
 }
 
 .block>div>button:enabled {

@@ -28,6 +28,15 @@ let timerTickInterval;
 // indicates if we provide guidance
 let autoGuidance;
 
+function styleUserButton(btn, vals) {
+    btn.innerText = vals.join(' ');
+    btn.className = 
+        vals.length > 2 ? 'user multi' :
+        vals.length > 0 ? 'user' : 
+        'empty';
+    
+}
+
 async function initGrid(paused) {
     const container = document.getElementById('container');
     // REMOVE current grid entirely
@@ -49,33 +58,29 @@ async function initGrid(paused) {
                 idiv.innerText = '?';
 
             } else {
-                switch (initialPuzzleArray[nid]) {
-                    case undefined: // array is not loaded!
-                        idiv.innerText = '?';
-                        break;
-                    case null:
-                        // this is a user space - the user must fill in a value
+                if (initialPuzzleArray[nid] === undefined) {
+                    // array is not loaded!
+                    idiv.innerText = '?';
+                } else if (initialPuzzleArray[nid].length === 0) {
+                
+                    // this is a user space - the user must fill in a value
 
-                        // make button <button class="empty"></button>
-                        const btn = document.createElement('button');
-                        btn.dataset.x = x;
-                        btn.dataset.y = y;
-                        btn.dataset.id = nid;
-                        if (userArray[nid]) { // has the user already filed in a value?
-                            btn.className = 'user';
-                            btn.innerText = userArray[nid];
-                        } else {
-                            btn.className = 'empty';
-                        }
-                        btn.addEventListener('click', gridBtnClick);
-                        idiv.append(btn);
-                        break;
-                    default:
-                        // this is a fixed value provided by the puzzle and cannot be changed
-                        idiv.innerText = initialPuzzleArray[nid];
-                        break;
-
+                    // make button <button class="empty"></button>
+                    const btn = document.createElement('button');
+                    btn.dataset.x = x;
+                    btn.dataset.y = y;
+                    btn.dataset.id = nid;
+                    styleUserButton(btn, userArray[nid]);
+                    
+                    btn.addEventListener('click', gridBtnClick);
+                    idiv.append(btn);
+                
+                } else {
+                    // this is a fixed value provided by the puzzle and cannot be changed
+                    idiv.innerText = initialPuzzleArray[nid];
                 }
+
+                
             }
 
             const odiv = document.createElement('div');
@@ -86,50 +91,64 @@ async function initGrid(paused) {
                 odiv.style[`margin-${border.Direction}`] = '3px';
             }
             
-
             odiv.append(idiv);
             container.append(odiv);
         
-    
-    
         }
     }
     
 }
 
 function assignButtonValue(value) {
-    buttonClicked.className = value ? 'user' : 'empty';
-    buttonClicked.innerText = value ? value : '';
-    userArray[buttonClicked.dataset.id] = Number(value);
+    if (value === null) {
+        // CLEAR all selections
+        userArray[buttonClicked.dataset.id] = [];
+    } else {
+        // TOGGLE the numeric selection given
+        const selectedVals = userArray[Number(buttonClicked.dataset.id)];
+        const idx = selectedVals.indexOf(value);
+
+        if (idx > -1) {
+            userArray[buttonClicked.dataset.id].splice(idx, 1); // remove the element
+        } else {
+            selectedVals.push(value);
+            selectedVals.sort();
+            userArray[buttonClicked.dataset.id] = selectedVals;
+        }     
+    }
+
+    updateChooserAndDisplayFromArray();
     checkCompletion();
 
 }
 
 function checkCompletion() {
-    const matches = userArray.length === completedArray.length && userArray.every((value, index) => value === completedArray[index]);
+    const matches = userArray.length === completedArray.length && 
+        userArray.every((value, index) => value.length === 1 && value[0] === completedArray[index]);
     if (matches) {
         // they have completed the puzzle succesfully!
         document.querySelectorAll('#container button').forEach(b => {
             b.disabled = true;
             b.className = 'success';
 
-
             setGameSuspended(true);
             document.getElementById('resumeButton').disabled = true;
+
+            document.getElementById('chooseNumberDialog').close();
 
         });
     }
 
 }
 
-function gridBtnClick(e) {
+function updateChooserAndDisplayFromArray() {
+    const selectedVals = userArray[Number(buttonClicked.dataset.id)];
 
-    buttonClicked = e.target;
     document.querySelectorAll('#chooseNumberDialog .block button').forEach(b => {
         // on "easy" mode, we oly allow plausible numbers from initial puzzle state
         // if we did from current puzzle state, we might prevent correct answers!
-        if (autoGuidance) {
-            const proposed = Number(b.value);
+        const proposed = Number(b.value);
+        if (autoGuidance) {            
             const x = Number(buttonClicked.dataset.x);
             const y = Number(buttonClicked.dataset.y);
             b.disabled = !checkPlausible(x, y, proposed);
@@ -137,13 +156,19 @@ function gridBtnClick(e) {
         } else {
             b.disabled = false;
         }
-        b.className = '';
+
+        b.className = selectedVals.includes(proposed) ? 'user' : '';
     });
 
-    if (buttonClicked.innerText) {
-        document.getElementById(`chooseNumberButton-${buttonClicked.innerText}`)
-            .className = 'user';
-    }
+    styleUserButton(buttonClicked, selectedVals);
+
+}
+
+function gridBtnClick(e) {
+
+    buttonClicked = e.target;
+    
+    updateChooserAndDisplayFromArray();
 
     document.getElementById('chooseNumberDialog').showModal();
 }
@@ -156,9 +181,10 @@ function chooserBtnClick(e) {
             assignButtonValue(null);
             break;
         default:
-            assignButtonValue(e.target.value);
+            assignButtonValue(Number(e.target.value));
 
     }
+    e.stopPropagation();
 }
 
 function timerTick() {
@@ -238,7 +264,13 @@ async function newGameSelected(e) {
 
     const result = await makePuzzle(shape, diffblanks);
     initialPuzzleArray = result.initialPuzzleArray;
-    userArray = [...initialPuzzleArray]; // clone array
+    // since it is an array of arrays, we must clone each sub-array
+    // otherwise the subarrays will be refs, can't just do the ... trick
+    userArray = new Array();
+    for (const member of initialPuzzleArray) {
+        userArray.push([...member]);
+    }
+
     completedArray = result.completedArray;
 
     document.getElementById('gameDesc').innerText = '';
@@ -260,11 +292,13 @@ function hint() {
     
     for (let nid = 0; nid < 81; nid++) {
         // if they've put in a value, themselves, not part of origin
-        if (userArray[nid] && !initialPuzzleArray[nid]) {
-            if (completedArray[nid] !== userArray[nid]) {
-                document.querySelector(`button[data-id='${nid}']`).className = 'hint-incorrect';
-            } else {
-                document.querySelector(`button[data-id='${nid}']`).className = 'success';
+        if (userArray[nid] && initialPuzzleArray[nid].length === 0) {
+            if (userArray[nid].length === 1) { // only check for individual values
+                if (completedArray[nid] !== userArray[nid][0]) {
+                    document.querySelector(`button[data-id='${nid}']`).className = 'hint-incorrect';
+                } else {
+                    document.querySelector(`button[data-id='${nid}']`).className = 'success';
+                }
             }
         } 
     }
@@ -288,7 +322,9 @@ function initUI() {
     // to fix?  Maybe
     document.getElementById('chooseNumberDialog').addEventListener('keydown', e => {
         if (e.key >= '0' && e.key <= '9') {
-            assignButtonValue(e.key);
+            assignButtonValue(Number(e.key));       
+        }
+        if (e.key === 'Enter') {
             document.getElementById('chooseNumberDialog').close();
         }
     });
@@ -307,7 +343,7 @@ function initUI() {
 
     // this allows the user to click outside a dialog to cancel/close the dialog
     document.querySelectorAll('dialog').forEach(b => {
-        b.addEventListener("click", (e) => {
+        b.addEventListener('click', (e) => {
             if (e.target === b) {
                 b.close();
             }

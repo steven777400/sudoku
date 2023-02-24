@@ -100,20 +100,21 @@ async function initGrid(paused) {
 }
 
 function assignButtonValue(value) {
+    const bidx = Number(buttonClicked.dataset.id);
     if (value === null) {
         // CLEAR all selections
-        userArray[buttonClicked.dataset.id] = [];
+        userArray[bidx] = [];
     } else {
         // TOGGLE the numeric selection given
-        const selectedVals = userArray[Number(buttonClicked.dataset.id)];
+        const selectedVals = userArray[bidx];
         const idx = selectedVals.indexOf(value);
 
         if (idx > -1) {
-            userArray[buttonClicked.dataset.id].splice(idx, 1); // remove the element
+            userArray[bidx].splice(idx, 1); // remove the element
         } else {
             selectedVals.push(value);
             selectedVals.sort();
-            userArray[buttonClicked.dataset.id] = selectedVals;
+            userArray[bidx] = selectedVals;
         }     
     }
 
@@ -325,6 +326,7 @@ function initUI() {
             assignButtonValue(Number(e.key));       
         }
         if (e.key === 'Enter') {
+            e.preventDefault();
             document.getElementById('chooseNumberDialog').close();
         }
     });

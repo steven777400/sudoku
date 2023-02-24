@@ -28,6 +28,9 @@ let timerTickInterval;
 // indicates if we provide guidance
 let autoGuidance;
 
+// for mobile, if we have a wake lock (prevents screen shutoff)
+let wakeLock;
+
 function styleUserButton(btn, vals) {
     btn.innerText = vals.join(' ');
     btn.className = 
@@ -243,9 +246,20 @@ function setGameSuspended(suspended) {
         const ndt = new Date().getTime();
         let elapsedMilliseconds = ndt - startTime;
         totalTime += elapsedMilliseconds;
+
+        if (wakeLock) {
+            wakeLock.release()
+                .then(() => {
+                    wakeLock = null;
+                });
+        }
     } else {
         startTime = new Date().getTime();
         timerTickInterval = setInterval(timerTick, 1000);
+        try {
+            navigator.wakeLock.request('screen')
+               .then(val => {wakeLock = val;}); 
+        } catch {}
     }
     document.getElementById('pauseButton').disabled = suspended;
     document.getElementById('resumeButton').disabled = !suspended;
@@ -346,6 +360,7 @@ function toggleButtonClicked(e) {
 }
 
 function initUI() {
+
 
     document.querySelectorAll('#chooseNumberDialog button').forEach(b => b.addEventListener('click', chooserBtnClick));
 

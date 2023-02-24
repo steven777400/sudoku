@@ -95,13 +95,16 @@
     </dialog>
 
     <script>
-        initUI();
-        initBackend().then(() => {
-            
+        async function start() {
+            initUI();
+            await initBackend()
+                
             // enable new game once the backend is loaded
             document.getElementById('newGameButton').disabled = false;
             console.log("Completed init");
-        });
+        }
+        start();
+
     </script>
 <footer>
     (c) 2023 <a href="https://kolls.net">Steve Kollmansberger</a>. <a href="https://github.com/steven777400/sudoku">GitHub</a>

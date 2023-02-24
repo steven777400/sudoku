@@ -101,12 +101,13 @@ async function initGrid(paused) {
 
 function assignButtonValue(value) {
     const bidx = Number(buttonClicked.dataset.id);
+    let selectedVals = [];
     if (value === null) {
         // CLEAR all selections
         userArray[bidx] = [];
     } else {
         // TOGGLE the numeric selection given
-        const selectedVals = userArray[bidx];
+        selectedVals = userArray[bidx];
         const idx = selectedVals.indexOf(value);
 
         if (idx > -1) {
@@ -119,8 +120,27 @@ function assignButtonValue(value) {
     }
 
     updateChooserAndDisplayFromArray();
-    checkCompletion();
 
+
+    // highlight any location that shares any selected value with this one
+    userArray.forEach((value, index) => {
+        // we will highlight if ANY value overlaps
+        // e.g. if user selected 2, 6 and another loc has 6, 8,
+        // we highlight
+        const intersection = value.filter(x => selectedVals.includes(x));
+        if (intersection.length > 0) {
+            // find the button in question
+            // NOTE: since user array contains all values
+            // some/many will not be buttons - not accessible
+            // so we use ?. to bypass those
+            document.querySelector(`button[data-id='${index}']`)?.
+                classList.add('hint-proposed'); 
+        }
+    });
+
+
+    checkCompletion();
+    
 }
 
 function checkCompletion() {
@@ -163,6 +183,8 @@ function updateChooserAndDisplayFromArray() {
 
     styleUserButton(buttonClicked, selectedVals);
 
+
+
 }
 
 function gridBtnClick(e) {
@@ -170,6 +192,11 @@ function gridBtnClick(e) {
     buttonClicked = e.target;
     
     updateChooserAndDisplayFromArray();
+    document.querySelectorAll('#container button').forEach(b => {
+        b.classList.remove('success');
+        b.classList.remove('hint-proposed');
+        b.classList.remove('hint-incorrect');
+    });
 
     document.getElementById('chooseNumberDialog').showModal();
 }
@@ -294,11 +321,15 @@ function hint() {
     for (let nid = 0; nid < 81; nid++) {
         // if they've put in a value, themselves, not part of origin
         if (userArray[nid] && initialPuzzleArray[nid].length === 0) {
+
             if (userArray[nid].length === 1) { // only check for individual values
+                const b = document.querySelector(`button[data-id='${nid}']`);
+                b.classList.remove('hint-proposed');
+
                 if (completedArray[nid] !== userArray[nid][0]) {
-                    document.querySelector(`button[data-id='${nid}']`).className = 'hint-incorrect';
+                    b.classList.add('hint-incorrect');
                 } else {
-                    document.querySelector(`button[data-id='${nid}']`).className = 'success';
+                    b.classList.add('success');
                 }
             }
         } 
